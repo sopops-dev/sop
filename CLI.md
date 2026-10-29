@@ -47,9 +47,9 @@ A closed pipe (`sop guide | head`) exits 0.
 
 ## sop
 
-Compiles every agent's prompt into `build/` inside the sop folder: one `<agent>.prompt.md` per agent, a `<agent>.tool.json` for agents with tool-delivered SOPs, and `lock.json`.
+Compiles every agent's prompt into `build/` inside the sop folder: one `<agent>.prompt.md` per agent, a `<agent>.template.md` for agents whose placeholders were filled (the prompt before filling, so code can fill it with its own values first), a `<agent>.tool.json` for agents with tool-delivered SOPs, and `lock.json`.
 
-`lock.json` lists, per agent: its `platform_ref`, the prompt's `hash`, the `tools` its SOPs name, and `blocks`: the agent file first, then each block in prompt order, as `{"kind", "id", "hash"}`. `kind` is `agent`, `instruction` or `sop`; a hash is the sha256 of the block's canonical JSON. Groups aren't listed: their blocks are.
+`lock.json` lists, per agent: its `platform_ref`, the prompt's `hash`, the `tools` its SOPs name, the `variables` that filled its placeholders (the agent's, then `sop.yaml` defaults), and `blocks`: the agent file first, then each block in prompt order, as `{"kind", "id", "hash"}`. `kind` is `agent`, `instruction` or `sop`; a hash is the sha256 of the block's canonical JSON. Groups aren't listed: their blocks are.
 
 An SOP's entry also lists its `rules`: each step, never and warning sign as `{"id", "kind", "index", "text"}`, so QA tools can attribute a violation to one rule. `kind` is `step`, `never` or `warning`; `index` is its 1-based position within that kind; `text` is the source text, trimmed with whitespace collapsed (placeholders not filled). `id` is the first 12 hex characters of sha256(`<sop id>` U+001F `<kind>` U+001F `<text>`): the same in every agent, unchanged by reordering or whitespace, new when the text is edited.
 

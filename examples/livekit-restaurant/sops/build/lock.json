@@ -99,7 +99,12 @@
         "lookup_allergens",
         "place_order",
         "transfer_to_staff"
-      ]
+      ],
+      "variables": {
+        "staff_transfer": "el gerente de turno",
+        "restaurant_name": "La Casita",
+        "menu_allergen_link": "lacasita.nyc/alergenos"
+      }
     },
     "luigis-trattoria": {
       "platform_ref": "livekit:luigis-trattoria",
@@ -231,7 +236,12 @@
         "lookup_allergens",
         "place_order",
         "transfer_to_staff"
-      ]
+      ],
+      "variables": {
+        "staff_transfer": "the manager on duty",
+        "restaurant_name": "Luigi's Trattoria",
+        "menu_allergen_link": "luigis.com/menu#allergens"
+      }
     },
     "sakura-sushi": {
       "platform_ref": "livekit:sakura-sushi",
@@ -337,7 +347,12 @@
         "lookup_allergens",
         "place_order",
         "transfer_to_staff"
-      ]
+      ],
+      "variables": {
+        "staff_transfer": "the head chef",
+        "restaurant_name": "Sakura Sushi",
+        "menu_allergen_link": "sakurasushi.nyc/allergens"
+      }
     },
     "tonys-pizza": {
       "platform_ref": "livekit:tonys-pizza",
@@ -442,7 +457,12 @@
         "lookup_allergens",
         "place_order",
         "transfer_to_staff"
-      ]
+      ],
+      "variables": {
+        "staff_transfer": "the manager on duty",
+        "restaurant_name": "Tony's Pizza",
+        "menu_allergen_link": "tonys.com/allergens"
+      }
     }
   }
 }

@@ -34,7 +34,7 @@ For each agent:
 2. **Its `blocks`, in list order.** A group expands in place, in the group's order (groups may contain groups). Each instruction's text and each SOP is added as listed, so an instruction listed after the SOPs (e.g. a call closing) ends the prompt.
 3. **The SOP heading** (`sops_heading`, `## Procedures` by default) goes once, right before the first SOP. Everything after it, SOPs and any instructions listed between or after them, follows in list order with no further heading. To leave the heading out, set `sops_heading: ""`.
 
-Parts are separated by a blank line. Then every `{{name}}` placeholder is replaced: the agent's `variables` first, then `sop.yaml` defaults. A placeholder with no value is a validation error.
+Parts are separated by a blank line. Then every `{{name}}` placeholder is replaced: the agent's `variables` first, then `sop.yaml` defaults. A placeholder with no value in either stays in the prompt as written, for the code that starts the call to fill (`unset_variable` warns about it).
 
 Rules that keep the list unambiguous:
 
@@ -257,7 +257,7 @@ Set exactly one platform field. Write `context` right after it, then `blocks`, s
 
 ## Placeholders
 
-`{{name}}` works in any text: instruction bodies, agent `context`, and every SOP field. Names use letters, digits, `_`, `-` and `.`. Each agent must have a value for every placeholder in the blocks it uses.
+`{{name}}` works in any text: instruction bodies, agent `context`, and every SOP field. Names use letters, digits, `_`, `-` and `.`. A value can come from `sop.yaml`, the agent, or the code that starts the call, which fills the agent's `<agent>.template.md` (see [CLI.md](CLI.md#sop)) and whose values win. A placeholder nobody fills stays as written.
 
 ## Recipes
 
@@ -321,7 +321,7 @@ Set exactly one platform field. Write `context` right after it, then `blocks`, s
 | `duplicate_block` | error | A block appears twice in an agent's expanded list (listed twice, or both directly and through a group). |
 | `duplicate_rule` | error | Two steps, two nevers or two warning signs of one SOP have the same text (ignoring whitespace), so they would share a rule id. |
 | `group_cycle` | error | Groups contain each other in a loop. |
-| `unset_variable` | error | A placeholder has no value for some agent. |
+| `unset_variable` | warning | A placeholder has no value in `sop.yaml` or the agent, so it stays in the prompt for the runtime to fill. |
 | `old_format` | error | A field or folder from the format of sopc v0.0.8 and earlier: `bases/`, `inherits`, `exclude`, `position`, `agents` on a block, `instructions` on an agent, `sop_order`. Run `sop migrate`. |
 | `removed_field` | error | `locked`, which sopc v0.0.9 and earlier read, on an instruction or SOP. It no longer exists; run `sop migrate` to remove it, or delete the line. |
 | `migrate_failed` | error | `sop migrate` can't convert a file exactly (or the folder is partly migrated); nothing is written. |

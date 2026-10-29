@@ -4,7 +4,7 @@
 use crate::analyze::{compare, compare_json, lint, overlap, unit_spans, units};
 use crate::model::*;
 use crate::plan::{affected, make_plan, read_snapshot, snapshot};
-use crate::render::{render_workspace, write_build, Build};
+use crate::render::{fill_variables, render_workspace, write_build, Build};
 use crate::text::pretty_json;
 use crate::workspace::{load, validate, Issue, Issues, Workspace};
 use std::collections::BTreeMap;
@@ -264,9 +264,24 @@ fn retell_agents() {
 
 #[test]
 fn unset_variable() {
+    // A placeholder with no value is a warning, and stays in the prompt for the runtime to fill.
     let r = Repo::new();
     r.edit("agents/luigis-trattoria.yaml", "  menu_allergen_link: luigis.com/menu#allergens\n", "");
-    assert_eq!(render_codes(r.root()), ["unset_variable"]);
+    let b = build(r.root());
+    assert_eq!(codes(&b.warnings), ["unset_variable"]);
+    let luigi = &b.agents["luigis-trattoria"];
+    assert!(luigi.prompt.contains("{{menu_allergen_link}}"));
+    assert!(luigi.variables.get("menu_allergen_link").is_none());
+}
+
+#[test]
+fn template_and_variables() {
+    // The template is the prompt before filling; the lock lists the values that filled it.
+    let b = build(&sops());
+    let luigi = &b.agents["luigis-trattoria"];
+    assert!(luigi.template.contains("{{menu_allergen_link}}"));
+    assert_eq!(fill_variables(&luigi.template, &luigi.variables), luigi.prompt);
+    assert_eq!(b.lock()["agents"]["luigis-trattoria"]["variables"]["menu_allergen_link"], "luigis.com/menu#allergens");
 }
 
 #[test]

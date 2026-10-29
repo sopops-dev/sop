@@ -1,4 +1,4 @@
-//! Assembling each agent's prompt, the get_sop payloads, and build/ (prompts and lock.json).
+//! Assembling each agent's prompt, the get_sop payloads, and build/ (prompts, templates and lock.json).
 
 use crate::model::{Agent, Block, Sop, Step, Vars};
 use crate::text::{pretty_json, sha256_hex};
@@ -200,6 +200,11 @@ pub fn fill_json(v: &mut Json, values: &Vars) {
 pub struct Rendered {
     pub agent: Agent,
     pub prompt: String,
+    /// The prompt before placeholders are filled, for code that fills them at call start.
+    pub template: String,
+    /// The values its placeholders got: the agent's `variables`, then `sop.yaml` defaults. A
+    /// placeholder with neither stays in the prompt as written.
+    pub variables: Vars,
     /// The instructions and SOPs it was built from, in prompt order.
     pub blocks: Vec<Block>,
     /// SOP id → get_sop payload, for SOPs not delivered entirely in the prompt.
@@ -255,9 +260,10 @@ impl Build {
                     entry
                 })
                 .collect();
+            let variables: Map<String, Json> = r.variables.0.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
             agents.insert(
                 id.clone(),
-                json!({"platform_ref": r.agent.platform_ref(), "hash": r.hash(), "blocks": blocks, "tools": r.tools}),
+                json!({"platform_ref": r.agent.platform_ref(), "hash": r.hash(), "blocks": blocks, "tools": r.tools, "variables": variables}),
             );
         }
         json!({"version": 1, "agents": agents})
@@ -291,7 +297,10 @@ pub fn render_agent(ws: &Workspace, agent: &Agent) -> Rendered {
     }
     sections.retain(|s| !s.is_empty());
     let values = ws.config.variables.merged(&agent.variables);
-    let prompt = fill_variables(&sections.join("\n\n"), &values) + "\n";
+    let template = sections.join("\n\n") + "\n";
+    let prompt = fill_variables(&template, &values);
+    let used = find_variables(&template);
+    let variables = Vars(values.0.iter().filter(|(k, _)| used.contains(k)).cloned().collect());
 
     let (mut tool_payload, mut tools) = (Map::new(), BTreeSet::new());
     for block in &blocks {
@@ -303,10 +312,11 @@ pub fn render_agent(ws: &Workspace, agent: &Agent) -> Rendered {
             tool_payload.insert(s.id.clone(), payload);
         }
     }
-    Rendered { agent: agent.clone(), prompt, blocks, tool_payload, tools: tools.into_iter().collect() }
+    Rendered { agent: agent.clone(), prompt, template, variables, blocks, tool_payload, tools: tools.into_iter().collect() }
 }
 
-/// Writes <agent>.prompt.md, <agent>.tool.json and lock.json into `out`. The files are written
+/// Writes <agent>.prompt.md, <agent>.template.md (when a placeholder was filled), <agent>.tool.json
+/// and lock.json into `out`. The files are written
 /// to a temp folder next to it and then renamed into place (lock.json last), so an error or
 /// Ctrl-C never leaves a half-written file or a missing prompt. Files the previous build listed in
 /// its lock.json that this one doesn't make are removed; nothing else in `out` is touched. A
@@ -316,6 +326,9 @@ pub fn write_build(build: &Build, out: &Path, force: bool) -> anyhow::Result<usi
     let mut files = vec![];
     for (id, r) in &build.agents {
         files.push((format!("{id}.prompt.md"), r.prompt.clone()));
+        if r.template != r.prompt {
+            files.push((format!("{id}.template.md"), r.template.clone()));
+        }
         if !r.tool_payload.is_empty() {
             files.push((format!("{id}.tool.json"), pretty_json(&Json::Object(r.tool_payload.clone()), false) + "\n"));
         }
@@ -349,7 +362,7 @@ pub fn write_build(build: &Build, out: &Path, force: bool) -> anyhow::Result<usi
     Ok(files.len() + 1)
 }
 
-/// The prompt and tool files the build in `dir` made, from its lock.json. A folder that has files
+/// The prompt, template and tool files the build in `dir` made, from its lock.json. A folder that has files
 /// but no lock.json wasn't built by sop: an error unless `force` (then nothing is removed).
 fn previous_build(dir: &Path, force: bool) -> anyhow::Result<Vec<String>> {
     let lock = std::fs::read_to_string(dir.join("lock.json")).ok().and_then(|t| serde_json::from_str::<Json>(&t).ok());
@@ -365,5 +378,5 @@ fn previous_build(dir: &Path, force: bool) -> anyhow::Result<Vec<String>> {
         return Ok(vec![]);
     };
     let ids = lock["agents"].as_object().into_iter().flat_map(|a| a.keys());
-    Ok(ids.flat_map(|id| [format!("{id}.prompt.md"), format!("{id}.tool.json")]).collect())
+    Ok(ids.flat_map(|id| [format!("{id}.prompt.md"), format!("{id}.template.md"), format!("{id}.tool.json")]).collect())
 }

@@ -101,18 +101,18 @@ fn compile_check_and_plan() {
 fn compile_prints_a_tidy_output_path() {
     let (dir, _) = repo();
     let out = sop_in(dir.path(), &["--dir", "./sops/"], &[]);
-    assert_eq!(out.stdout, "wrote 6 files to sops/build\n");
+    assert_eq!(out.stdout, "wrote 9 files to sops/build\n");
 }
 
 #[test]
 fn bare_sop_compiles_the_default_folder() {
     let (dir, _) = repo();
     let out = sop_in(dir.path(), &[], &[]);
-    assert_eq!((out.code, out.stdout.as_str()), (0, "wrote 6 files to sops/build\n"), "{}", out.stderr);
+    assert_eq!((out.code, out.stdout.as_str()), (0, "wrote 9 files to sops/build\n"), "{}", out.stderr);
     let out = sop_in(dir.path(), &["--check"], &[]);
     assert_eq!((out.code, out.stdout.as_str()), (0, "sops/build is up to date\n"), "{}", out.stderr);
     let out = sop_in(dir.path(), &["-o", "dist"], &[]);
-    assert_eq!(out.stdout, "wrote 6 files to dist\n");
+    assert_eq!(out.stdout, "wrote 9 files to dist\n");
     let out = sop_in(dir.path(), &["--out", "dist", "--check"], &[]);
     assert_eq!(out.stdout, "dist is up to date\n");
     for cmd in [&["validate"][..], &["lint"], &["fmt", "--check"], &["agents"]] {
@@ -120,9 +120,9 @@ fn bare_sop_compiles_the_default_folder() {
     }
     // An explicit folder wins over the default one.
     let out = sop_in(dir.path(), &["--dir", "sops", "-o", "elsewhere"], &[]);
-    assert_eq!(out.stdout, "wrote 6 files to elsewhere\n");
+    assert_eq!(out.stdout, "wrote 9 files to elsewhere\n");
     let sops = dir.path().join("sops");
-    assert_eq!(sop_in(&sops, &["--dir", "."], &[]).stdout, "wrote 6 files to build\n");
+    assert_eq!(sop_in(&sops, &["--dir", "."], &[]).stdout, "wrote 9 files to build\n");
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn compile_keeps_files_it_did_not_build() {
     assert_eq!(out.code, 1);
     assert!(out.stderr.contains("docs has files but no lock.json"), "{}", out.stderr);
     assert!(!dir.path().join("docs/lock.json").exists());
-    assert_eq!(run_ok(dir.path(), &["-o", "docs", "--force"]).stdout, "wrote 6 files to docs\n");
+    assert_eq!(run_ok(dir.path(), &["-o", "docs", "--force"]).stdout, "wrote 9 files to docs\n");
     assert_eq!(read(&dir.path().join("docs/notes.prompt.md")), "mine");
     // --force is a compile flag.
     assert_eq!(sop_in(dir.path(), &["--force", "validate"], &[]).code, 2);
@@ -158,10 +158,10 @@ fn default_folder_is_sops_then_the_current_one() {
     // sops/sop.yaml wins even when ./sop.yaml exists too.
     copy_dir(&fixture().join("sops"), &dir.path().join("other"));
     std::fs::copy(dir.path().join("sops/sop.yaml"), dir.path().join("sop.yaml")).unwrap();
-    assert_eq!(sop_in(dir.path(), &[], &[]).stdout, "wrote 6 files to sops/build\n");
+    assert_eq!(sop_in(dir.path(), &[], &[]).stdout, "wrote 9 files to sops/build\n");
     // Inside the folder itself, ./ is used.
     let other = dir.path().join("other");
-    assert_eq!(sop_in(&other, &[], &[]).stdout, "wrote 6 files to build\n");
+    assert_eq!(sop_in(&other, &[], &[]).stdout, "wrote 9 files to build\n");
     assert_eq!(sop_in(&other, &["validate"], &[]).code, 0);
     // Neither: an error that says what to pass.
     let empty = tempfile::tempdir().unwrap();
@@ -353,7 +353,7 @@ fn migrate_renames_the_old_config_name() {
     assert!(!root.join("sopc.yaml").exists());
     assert_eq!(read(&root.join("sop.yaml")), text);
     let out = sop_in(dir.path(), &[], &[]);
-    assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "wrote 6 files to sops/build\n", ""));
+    assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "wrote 9 files to sops/build\n", ""));
     for entry in std::fs::read_dir(fixture().join("expected")).unwrap() {
         let p = entry.unwrap().path();
         let name = p.file_name().unwrap();
@@ -1075,7 +1075,7 @@ fn migrated_prompts_match_the_old_build_except_the_context() {
     run_ok(dir.path(), &["migrate", "--yes"]);
     let new = built(&root, &dir.path().join("out"));
     let old = repo_root().join("tests/fixtures/old-format/restaurants/expected");
-    for (name, text) in &new {
+    for (name, text) in new.iter().filter(|(name, _)| !name.ends_with(".template.md")) {
         let before = read(&old.join(name));
         if name.ends_with(".tool.json") {
             assert_eq!(text, &before, "{name}");

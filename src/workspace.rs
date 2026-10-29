@@ -517,7 +517,8 @@ pub fn validate(ws: &Workspace) -> Vec<Issue> {
         }
         let values = ws.config.variables.merged(&agent.variables);
         for name in names.iter().filter(|n| values.get(n).is_none()) {
-            issues.push(Issue::error("unset_variable", &path, format!("'{{{{{name}}}}}' is used but has no value")));
+            let msg = format!("'{{{{{name}}}}}' has no value here or in sop.yaml; it stays in the prompt for the code that starts the call to fill");
+            issues.push(Issue::warning("unset_variable", &path, msg));
         }
     }
     if !ws.agents.is_empty() {
