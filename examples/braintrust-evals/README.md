@@ -1,13 +1,13 @@
 # 📋🧩 Example: block SOP changes that make agents worse (Braintrust + GitHub Actions)
 
-`sopc plan` shows *what* text a change touches. This example checks *how the agents behave* before you merge: on every pull request that edits your SOPs, it finds the agents whose prompts changed, runs their test calls in [Braintrust](https://www.braintrust.dev) against the old and new prompts, posts the results on the PR, and fails the check if any call got worse.
+`sop plan` shows *what* text a change touches. This example checks *how the agents behave* before you merge: on every pull request that edits your SOPs, it finds the agents whose prompts changed, runs their test calls in [Braintrust](https://www.braintrust.dev) against the old and new prompts, posts the results on the PR, and fails the check if any call got worse.
 
 ```
 evals/
   cases.yaml        test calls: what the caller says, what a good agent does
   run_evals.py      builds old + new prompts, picks the affected cases, runs them, compares
 .github/workflows/
-  sopc-evals.yml the GitHub Action (copy into your repo)
+  sop-evals.yml the GitHub Action (copy into your repo)
 ```
 
 ## What it caught
@@ -21,7 +21,7 @@ A PR changed one step of the shared allergen SOP to "speed up" calls:
 -  - Never say an item is "allergen-free" or "safe"
 ```
 
-`sopc plan` reported "SOP `allergen-check` edited → 4 agents", and the check posted this on the PR (real run, abridged):
+`sop plan` reported "SOP `allergen-check` edited → 4 agents", and the check posted this on the PR (real run, abridged):
 
 | Agent | Case | Before | After | |
 |---|---|---|---|---|
@@ -47,7 +47,7 @@ With the old SOP, the same calls never said "safe". A harmless wording change to
 ## How it decides what to run
 
 1. Builds every agent's prompt at the PR's base branch and at its head.
-2. `sopc plan` lists the agents whose prompts changed.
+2. `sop plan` lists the agents whose prompts changed.
 3. A case runs for a changed agent if it names one of that agent's SOPs (`sops:`) or the agent itself (`agents:`). Edit `allergen-check` and the allergy cases run for every agent that has that SOP; agents whose prompt didn't change aren't tested.
 4. Each case runs 3 times against both prompts (model replies vary), as two Braintrust experiments you can compare side by side.
 5. A case **regresses** if its average score drops by more than 0.25. Any regression, or any run that errored, fails the check.
@@ -74,10 +74,10 @@ When a real call goes wrong, turn it into a case. Every later change to that SOP
 
 ## Set it up
 
-1. Copy `evals/` and `.github/workflows/sopc-evals.yml` into your repo (next to your `sops/` folder).
+1. Copy `evals/` and `.github/workflows/sop-evals.yml` into your repo (next to your `sops/` folder).
 2. Add `BRAINTRUST_API_KEY` as a repository secret. Model calls go through the Braintrust AI proxy, so that one key covers OpenAI, Anthropic and others.
-3. Set `SOPC_EVAL_MODEL` in the workflow to the model your agents run on.
-4. In your branch protection rules, make the **sopc evals** check required. That's what blocks the merge.
+3. Set `SOP_EVAL_MODEL` in the workflow to the model your agents run on.
+4. In your branch protection rules, make the **sop evals** check required. That's what blocks the merge.
 
 Try it locally first, without Braintrust (uses `OPENAI_API_KEY`, results stay on your machine). It reads `sops/` and `evals/cases.yaml` unless you pass `--sops` and `--cases`:
 

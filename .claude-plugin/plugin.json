@@ -1,8 +1,8 @@
 {
-  "name": "sopc",
-  "description": "Import existing agent prompts into sopc (shared bases, SOPs, one file per agent), verify nothing was lost, and report conflicts.",
+  "name": "sop",
+  "description": "Import existing agent prompts into sop (shared bases, SOPs, one file per agent), verify nothing was lost, and report conflicts.",
   "author": { "name": "Aman Ibrahim", "url": "https://github.com/amanmibra" },
-  "homepage": "https://github.com/amanmibra/sopc",
-  "repository": "https://github.com/amanmibra/sopc",
+  "homepage": "https://github.com/sopops-dev/sop",
+  "repository": "https://github.com/sopops-dev/sop",
   "license": "Apache-2.0"
 }

@@ -1,11 +1,11 @@
 # Copy to .github/workflows/ in your repo.
 #
-# On every PR that changes your sopc files or eval cases: find the agents whose prompts
+# On every PR that changes your sop files or eval cases: find the agents whose prompts
 # changed, run their eval cases in Braintrust against the old and new prompts, comment the
 # results on the PR, and fail the check if any case got worse. Make the check required in
 # your branch protection rules to block the merge.
 
-name: sopc evals
+name: sop evals
 
 on:
   pull_request:
@@ -26,15 +26,15 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Install sopc
+      - name: Install sop
         run: |
-          curl -fsSL https://raw.githubusercontent.com/amanmibra/sopc/main/install.sh | SOPC_REF=v0.0.17 sh
+          curl -fsSL https://raw.githubusercontent.com/sopops-dev/sop/main/install.sh | sh # pin a release with SOP_REF=<tag> sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run evals for the agents this PR changes
         env:
           BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
-          SOPC_EVAL_MODEL: gpt-4.1-mini # the model your agents run on
+          SOP_EVAL_MODEL: gpt-4.1-mini # the model your agents run on
         run: |
           uv run \
             --with braintrust --with autoevals --with openai --with pyyaml \

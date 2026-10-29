@@ -1,15 +1,15 @@
 ---
-name: sopc-import
-description: Convert existing voice/task agent prompts (in code, or pulled read-only from LiveKit, ElevenLabs, Vapi or Retell) into sopc files (shared instructions, SOPs, one file per agent listing the blocks it uses), verify nothing was lost, and report conflicts. Asks the user to fill gaps and approve a short import plan before writing files, and again before committing. Use when the user asks to import, migrate, modularize or "sopc-ify" agent prompts or instructions, or invokes this skill (/sopc-import in Claude Code, $sopc-import in Codex).
+name: sop-import
+description: Convert existing voice/task agent prompts (in code, or pulled read-only from LiveKit, ElevenLabs, Vapi or Retell) into sop files (shared instructions, SOPs, one file per agent listing the blocks it uses), verify nothing was lost, and report conflicts. Asks the user to fill gaps and approve a short import plan before writing files, and again before committing. Use when the user asks to import, migrate, modularize or "sop-ify" agent prompts or instructions, or invokes this skill (/sop-import in Claude Code, $sop-import in Codex).
 ---
 
-# Import existing prompts into sopc
+# Import existing prompts into sop
 
-You are turning a team's hand-written agent prompts into a sopc folder: shared text written once as instructions, procedures as SOPs, and a short file per agent with its own text and the list of blocks it uses, in prompt order. The compiled prompts must say everything the originals said. You do the judgment; the `sopc` CLI does the counting and checking; the user makes the decisions.
+You are turning a team's hand-written agent prompts into a sop folder: shared text written once as instructions, procedures as SOPs, and a short file per agent with its own text and the list of blocks it uses, in prompt order. The compiled prompts must say everything the originals said. You do the judgment; the `sop` CLI does the counting and checking; the user makes the decisions.
 
 The flow has two approval checkpoints:
 
-1. **Before writing any sopc file:** the user approves a one-screen import plan.
+1. **Before writing any sop file:** the user approves a one-screen import plan.
 2. **Before committing or pushing:** the user approves a one-screen result summary.
 
 Never commit, push or open a pull request without the second approval.
@@ -23,17 +23,17 @@ Never commit, push or open a pull request without the second approval.
 
 ## 0. Set up the CLI (automatic)
 
-This skill needs the `sopc` command. Set it up without making the user do anything:
+This skill needs the `sop` command. Set it up without making the user do anything:
 
-1. Run `sopc --version || sopc --help`. If it works, skip to step 3.
-2. If it's missing, tell the user in one line that you're installing the sopc CLI (a single binary, into `~/.local/bin`), then run:
+1. Run `sop --version || sop --help`. If it works, skip to step 3.
+2. If it's missing, tell the user in one line that you're installing the sop CLI (a single binary, into `~/.local/bin`), then run:
 
    ```
-   curl -fsSL https://raw.githubusercontent.com/amanmibra/sopc/main/install.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/sopops-dev/sop/main/install.sh | sh
    ```
 
-   If `sopc` still isn't found afterwards, run it by its full path (`~/.local/bin/sopc`) for the rest of this skill, and tell the user to add `~/.local/bin` to their PATH. If the install fails (no network, unsupported platform), stop and show the user the error.
-3. Run `sopc guide` and read the whole format reference before writing any file.
+   If `sop` still isn't found afterwards, run it by its full path (`~/.local/bin/sop`) for the rest of this skill, and tell the user to add `~/.local/bin` to their PATH. If the install fails (no network, unsupported platform), stop and show the user the error.
+3. Run `sop guide` and read the whole format reference before writing any file.
 
 ## 1. Collect the originals
 
@@ -55,7 +55,7 @@ Then get every agent's current prompt. Pull it from the platform when you can, s
 
 Keys: never ask the user to paste a key into the chat, never print one, and never write one into a file you create. Read-only keys are enough if the platform offers them. If the user can't set any of this up, fall back to asking them to export or paste the prompts.
 
-Some agents aren't one prompt: ElevenLabs workflows, Vapi squads or workflows, Retell conversation flows (`response_engine.type: conversation-flow`) and multi-state Retell LLMs. sopc compiles one prompt per agent, so list these in the plan as "not imported" with the reason, unless the user wants the main prompt imported alone. Also note per agent what lives outside the prompt (first message, voice, model, tools); sopc doesn't manage those, so leave them on the platform.
+Some agents aren't one prompt: ElevenLabs workflows, Vapi squads or workflows, Retell conversation flows (`response_engine.type: conversation-flow`) and multi-state Retell LLMs. sop compiles one prompt per agent, so list these in the plan as "not imported" with the reason, unless the user wants the main prompt imported alone. Also note per agent what lives outside the prompt (first message, voice, model, tools); sop doesn't manage those, so leave them on the platform.
 
 For each agent:
 - Choose an id: lowercase kebab-case, ideally the platform's own name for it (LiveKit `agent_name`, or the agent's display name on other platforms).
@@ -66,16 +66,16 @@ For each agent:
 **Ask now (one batch), only what you couldn't find:**
 - Where prompts live, if you couldn't find all of them, and whether any agents should be left out (e.g. test or archived agents on the platform).
 - Platform ids you couldn't find.
-- Where the sopc folder should go (default: `sops/` at the repo root).
+- Where the sop folder should go (default: `sops/` at the repo root).
 - Prompts assembled at runtime from data you can't see (e.g. a database): ask for an export or a sample.
 
 ## 2. Find what's shared
 
 ```
-sopc overlap sops/originals
+sop overlap sops/originals
 ```
 
-This lists sentences shared by all agents, shared by subsets, near-copies that differ only by a value, and how much is unique to each agent. Use it as the map for the plan. With many agents, read `sopc overlap sops/originals --json` instead: `variables` groups each value (a restaurant name used in ten sentences is one variable, with its value per agent), `missing` lists text most agents have but some lack, and `unique` gives each agent's own text.
+This lists sentences shared by all agents, shared by subsets, near-copies that differ only by a value, and how much is unique to each agent. Use it as the map for the plan. With many agents, read `sop overlap sops/originals --json` instead: `variables` groups each value (a restaurant name used in ten sentences is one variable, with its value per agent), `missing` lists text most agents have but some lack, and `unique` gives each agent's own text.
 
 ## 3. Checkpoint 1: the import plan
 
@@ -119,9 +119,9 @@ What belongs in "Decisions needed":
 - **Unclear classification.** Passages that could be a procedure or plain text.
 - **Contradictions you already see.** Report them, don't resolve them.
 
-## 4. Write the sopc files
+## 4. Write the sop files
 
-Create `sops/sopc.yaml`, `sops/instructions/`, `sops/procedures/`, `sops/agents/`, following the approved plan and the format reference.
+Create `sops/sop.yaml`, `sops/instructions/`, `sops/procedures/`, `sops/agents/`, following the approved plan and the format reference.
 
 Blocks (instructions and SOPs) never say which agents use them. Each agent file lists its blocks, in the order the text appeared in that agent's original prompt:
 
@@ -129,7 +129,7 @@ Blocks (instructions and SOPs) never say which agents use them. Each agent file 
 |---|---|
 | Shared, not a procedure (identity, tone, policies) | An instruction, `sops/instructions/<id>.md` (plain Markdown, no front matter needed) |
 | A procedure: a situation and what to do in it | An SOP (see below) |
-| The same blocks, in the same order, in many agents | A group in `sopc.yaml`; those agents list the group in `blocks` instead |
+| The same blocks, in the same order, in many agents | A group in `sop.yaml`; those agents list the group in `blocks` instead |
 | A near-copy that differs only by a value (name, hours, phone number, link) | One shared sentence with a `{{placeholder}}`; each agent's value in its `variables` |
 | Said only at the end of the call | An instruction each agent lists last |
 | Facts about one agent only | That agent's `context` |
@@ -152,7 +152,7 @@ variables:
 
 `context` goes first in the compiled prompt, before every block. If an original prompt had agent-specific text in the middle, it moves to the top; `compare` treats that as kept, but mention it in the summary. Each block may appear once per agent (directly or through a group).
 
-**Groups.** In `sops/sopc.yaml`, also as bullet lists:
+**Groups.** In `sops/sop.yaml`, also as bullet lists:
 
 ```yaml
 groups:
@@ -195,30 +195,30 @@ Any other text from the passage goes here, as guidance.
 **Rules while writing:**
 - Preserve wording. Don't improve, shorten or merge instructions during import; that's a separate, reviewed step. Allowed edits: replacing a value with a `{{placeholder}}`, and removing a sentence that a shared block now provides.
 - Don't drop anything. If you can't place a sentence, put it in that agent's `context`.
-- In YAML files (agents, `sopc.yaml`), quote any string containing `: ` (colon space), or use a `|` block.
+- In YAML files (agents, `sop.yaml`), quote any string containing `: ` (colon space), or use a `|` block.
 - Convert code placeholders like `${restaurantName}` to `{{restaurant_name}}` with a value per agent.
 
 If something comes up that the plan didn't cover and that changes what an agent would say, stop and ask before continuing.
 
 ## 5. Validate, compile, compare. Repeat until clean.
 
-Run these from the repo root. They use `sops/` by default; if the folder is somewhere else, add `--dir path/to/sops` to each command (`sopc --dir path/to/sops`, `sopc validate --dir path/to/sops`).
+Run these from the repo root. They use `sops/` by default; if the folder is somewhere else, add `--dir path/to/sops` to each command (`sop --dir path/to/sops`, `sop validate --dir path/to/sops`).
 
 ```
-sopc fmt
-sopc validate
-sopc
-sopc compare --originals sops/originals
+sop fmt
+sop validate
+sop
+sop compare --originals sops/originals
 ```
 
-If `sopc fmt` lists a file it won't rewrite because that would remove comments, don't add `--yes`: leave the file, or move the comment's content somewhere it survives, and mention it to the user. Only use `--yes` if the user approves removing exactly those comments.
+If `sop fmt` lists a file it won't rewrite because that would remove comments, don't add `--yes`: leave the file, or move the comment's content somewhere it survives, and mention it to the user. Only use `--yes` if the user approves removing exactly those comments.
 
 `compare` fails if any sentence from an original is **missing** or **changed** in the compiled prompt, and shows the changed words. Fix those; they're lost or altered instructions. **Reworded** lines (most words present, e.g. one sentence split into steps) don't fail; check each one says the same thing. **Added** lines should only be SOP headings and approved goals. Repeat until every agent passes.
 
 ## 6. Check for conflicts
 
 ```
-sopc lint
+sop lint
 ```
 
 This finds duplicated sentences, the same sentence with different numbers, "do X" vs "never X", near-identical sentences that drifted, and unused variables. Then read each compiled prompt in `sops/build/` yourself for contradictions the CLI can't see (e.g. one block offers delivery while the agent says pickup only).
@@ -227,7 +227,7 @@ This finds duplicated sentences, the same sentence with different numbers, "do X
 
 ## 7. Checkpoint 2: the result summary
 
-Run `sopc fmt` once more (then `sopc` if it changed anything) so the files are in canonical style. Then show one screen and ask before committing:
+Run `sop fmt` once more (then `sop` if it changed anything) so the files are in canonical style. Then show one screen and ask before committing:
 
 ```
 Imported 30 agents into sops/
@@ -240,14 +240,14 @@ Conflicts to decide later (unchanged from today's behavior)
   1. upsell: "once" (29 agents) vs "twice" (luigis-trattoria), kept as a variable
   2. tonys-pizza says "pickup only after 10pm"; pizza-context says delivery until 11pm
 
-Files: sops/sopc.yaml, sops/instructions/ (5), sops/procedures/ (4), sops/agents/ (30), sops/build/ (generated)
+Files: sops/sop.yaml, sops/instructions/ (5), sops/procedures/ (4), sops/agents/ (30), sops/build/ (generated)
 Not included: sops/originals/ (your old prompts, for reference; delete or add to .gitignore)
 
-Commit these on a new branch and open a PR? (default: commit on branch sopc-import, don't push)
+Commit these on a new branch and open a PR? (default: commit on branch sop-import, don't push)
 ```
 
 Only commit, push or open a PR after the user says so, and only as far as they said (commit only, push, or PR). Don't include `sops/originals/` unless asked.
 
 Then list the next steps:
 - Load each agent's prompt from `sops/build/<id>.prompt.md` in the agent code instead of the hard-coded string.
-- Before future edits, run `sopc plan` (it compares with the default branch) to see which agents a change reaches.
+- Before future edits, run `sop plan` (it compares with the default branch) to see which agents a change reaches.

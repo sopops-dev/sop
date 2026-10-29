@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../../../spec/sop.schema.json
 #
 # SOPs can also be written in YAML, with the same fields. Agents get this one
-# through the delivery-orders group in sopc.yaml; sakura-sushi doesn't list it.
+# through the delivery-orders group in sop.yaml; sakura-sushi doesn't list it.
 
 name: Delivery
 description: Delivery orders have a confirmed address inside the delivery zone.

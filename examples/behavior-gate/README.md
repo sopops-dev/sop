@@ -12,18 +12,18 @@ A GitHub Action that works out **which agents a pull request changes** and hands
 |---|---|
 | PR changes SOP files | The agents whose built prompt changed, compared with the base branch |
 | PR changes only tests, or SOP edits that don't change any prompt | All agents |
-| Started by hand with `agents: "la-casita asst_9f3e"` | Those agents, by sopc id or platform id (unknown ids fail the run) |
+| Started by hand with `agents: "la-casita asst_9f3e"` | Those agents, by agent id or platform id (unknown ids fail the run) |
 | Started by hand with no agents | All agents |
 
 Agents removed in the PR are skipped. A shared change reaches only the agents that use it: editing the English brand voice in the [restaurant example](../livekit-restaurant) tests three agents and skips `la-casita`, which uses the Spanish one.
 
 ## What your command gets
 
-The detect job is one command, `sopc affected --against origin/<base branch> --all-if-none --ci`, and the `test` job passes its results to your command:
+The detect job is one command, `sop affected --against origin/<base branch> --all-if-none --ci`, and the `test` job passes its results to your command:
 
 | Variable | Example |
 |---|---|
-| `AGENT_IDS` | `tonys-pizza sakura-sushi` (sopc ids: the file names in `agents/`) |
+| `AGENT_IDS` | `tonys-pizza sakura-sushi` (agent ids: the file names in `agents/`) |
 | `AGENT_PLATFORM_IDS` | `tonys-pizza asst_9f3e` (each agent's own id on its platform: LiveKit `agent_name`, Vapi assistant id, ElevenLabs `agent_id`) |
 | `AGENTS_JSON` | one object per agent (main fields below) |
 | `ALL_AGENTS` | `true` when testing every agent |
@@ -62,16 +62,16 @@ To test agents in parallel instead, uncomment the `test-each` job: it runs once 
 ## Set it up
 
 1. Copy `.github/workflows/behavior-gate.yml` into your repo.
-2. If your sopc folder isn't `sops/` (or the repo root), set `SOPC_ROOT` to it and change the `sops/**` path. Add the `paths:` your tests live in.
+2. If your sop folder isn't `sops/` (or the repo root), set `SOP_ROOT` to it and change the `sops/**` path. Add the `paths:` your tests live in.
 3. Replace the placeholder in **Run your tests** with your command (it fails on purpose until you do).
 4. Make the **behavior-gate / test** check required in your branch protection rules, so failing tests block the merge.
 
 The same command works outside GitHub Actions:
 
 ```sh
-sopc affected                                   # sopc ids, one per line, compared with your default branch
-sopc affected --format platform-ids             # the platforms' own ids
-sopc affected --format json                     # everything, including changed SOPs
-sopc affected --against release                 # compared with another branch or ref
-sopc affected --agents "asst_9f3e la-casita"    # specific agents (either kind of id)
+sop affected                                   # agent ids, one per line, compared with your default branch
+sop affected --format platform-ids             # the platforms' own ids
+sop affected --format json                     # everything, including changed SOPs
+sop affected --against release                 # compared with another branch or ref
+sop affected --agents "asst_9f3e la-casita"    # specific agents (either kind of id)
 ```

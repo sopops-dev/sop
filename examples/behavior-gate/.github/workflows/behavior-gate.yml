@@ -2,7 +2,7 @@
 #
 # Copy to .github/workflows/ in your repo, then fill in the "Run your tests" step.
 #
-#   job `detect`  `sopc affected` works out which agents to test:
+#   job `detect`  `sop affected` works out which agents to test:
 #                   - the agents whose built prompt changed in this PR
 #                   - or, if none changed (e.g. only test files changed) or the run was started
 #                     by hand with no agents given: every agent
@@ -17,24 +17,24 @@ name: behavior-gate
 on:
   pull_request:
     paths:
-      - "sops/**"     # your sopc root
+      - "sops/**"     # your sop root
       - "tests/**"    # your agent tests (changes here run every agent)
   workflow_dispatch:
     inputs:
       agents:
-        description: "Agents to test: sopc ids or platform ids, space-separated (blank = all)"
+        description: "Agents to test: agent ids or platform ids, space-separated (blank = all)"
         required: false
         default: ""
 
 env:
-  SOPC_ROOT: "" # your sopc folder; blank = sops/ (or the repo root if sopc.yaml is there)
-  SOPC_VERSION: v0.0.17 # a sopc release tag
+  SOP_ROOT: "" # your sop folder; blank = sops/ (or the repo root if sop.yaml is there)
+  SOP_VERSION: "" # a sop release tag to pin; blank = the latest release
 
 jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      ids: ${{ steps.agents.outputs.ids }}                    # sopc ids: "tonys-pizza sakura-sushi"
+      ids: ${{ steps.agents.outputs.ids }}                    # agent ids: "tonys-pizza sakura-sushi"
       platform_ids: ${{ steps.agents.outputs.platform_ids }}  # the platform's own ids: "tonys-pizza asst_9f3e"
       matrix: ${{ steps.agents.outputs.matrix }}              # JSON list, one object per agent (see README)
       count: ${{ steps.agents.outputs.count }}
@@ -44,14 +44,14 @@ jobs:
         with:
           fetch-depth: 0 # the base branch is needed to see what changed
 
-      - name: Install sopc
+      - name: Install sop
         run: |
-          curl -fsSL https://raw.githubusercontent.com/amanmibra/sopc/main/install.sh | SOPC_REF="$SOPC_VERSION" sh
+          curl -fsSL https://raw.githubusercontent.com/sopops-dev/sop/main/install.sh | SOP_REF="$SOP_VERSION" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # Fail first on duplicated or conflicting instructions. Delete this step to allow them.
       - name: Lint
-        run: sopc lint ${SOPC_ROOT:+--dir "$SOPC_ROOT"} --strict
+        run: sop lint ${SOP_ROOT:+--dir "$SOP_ROOT"} --strict
 
       - name: Work out which agents to test
         id: agents
@@ -60,14 +60,14 @@ jobs:
           # changed and --all-if-none tests every agent (unless agents were given).
           AGAINST: ${{ github.base_ref && format('origin/{0}', github.base_ref) || 'HEAD' }}
           REQUESTED: ${{ inputs.agents }}
-        run: sopc affected ${SOPC_ROOT:+--dir "$SOPC_ROOT"} --against "$AGAINST" --agents "$REQUESTED" --all-if-none --ci
+        run: sop affected ${SOP_ROOT:+--dir "$SOP_ROOT"} --against "$AGAINST" --agents "$REQUESTED" --all-if-none --ci
 
   test:
     needs: detect
     if: needs.detect.outputs.count != '0'
     runs-on: ubuntu-latest
     env:
-      AGENT_IDS: ${{ needs.detect.outputs.ids }}                   # sopc ids (file names in agents/)
+      AGENT_IDS: ${{ needs.detect.outputs.ids }}                   # agent ids (file names in agents/)
       AGENT_PLATFORM_IDS: ${{ needs.detect.outputs.platform_ids }} # LiveKit agent_name, Vapi assistant id, ...
       AGENTS_JSON: ${{ needs.detect.outputs.matrix }}              # per agent: ids, platform, changed SOPs, all SOPs
       ALL_AGENTS: ${{ needs.detect.outputs.all }}                  # "true" if testing every agent

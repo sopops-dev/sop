@@ -86,7 +86,7 @@ pub fn make_plan(before: &Snapshot, after: &Snapshot) -> Plan {
             (None, None) => unreachable!(),
         };
         if status == "changed" && blocks.is_empty() {
-            blocks.insert("workspace:sopc.yaml".into(), "edited"); // e.g. a default variable changed
+            blocks.insert("workspace:sop.yaml".into(), "edited"); // e.g. a default variable changed
         }
         let diff = unified_diff(prompt_of(old), prompt_of(new), id);
         changes.push(AgentChange { agent: id.clone(), status, platform_ref, blocks, diff });
@@ -311,7 +311,7 @@ pub fn affected(
     Ok(Affected { agents, all: true })
 }
 
-/// Maps sopc ids, platform refs and platform ids to sopc ids.
+/// Maps agent ids, platform refs and platform ids to agent ids.
 pub fn resolve_requested(head: &Build, requested: &[String]) -> Result<Vec<String>, Issues> {
     let mut lookup: BTreeMap<String, String> = BTreeMap::new();
     for (id, r) in &head.agents {

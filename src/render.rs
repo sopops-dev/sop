@@ -350,15 +350,15 @@ pub fn write_build(build: &Build, out: &Path, force: bool) -> anyhow::Result<usi
 }
 
 /// The prompt and tool files the build in `dir` made, from its lock.json. A folder that has files
-/// but no lock.json wasn't built by sopc: an error unless `force` (then nothing is removed).
+/// but no lock.json wasn't built by sop: an error unless `force` (then nothing is removed).
 fn previous_build(dir: &Path, force: bool) -> anyhow::Result<Vec<String>> {
     let lock = std::fs::read_to_string(dir.join("lock.json")).ok().and_then(|t| serde_json::from_str::<Json>(&t).ok());
     let Some(lock) = lock else {
         let empty = std::fs::read_dir(dir).map_or(true, |mut entries| entries.next().is_none());
         if !empty && !force {
             anyhow::bail!(
-                "{} has files but no lock.json, so sopc didn't build it; use an empty or new folder, \
-                 or pass --force to write into it (only the files sopc builds are overwritten)",
+                "{} has files but no lock.json, so sop didn't build it; use an empty or new folder, \
+                 or pass --force to write into it (only the files sop builds are overwritten)",
                 dir.display()
             );
         }

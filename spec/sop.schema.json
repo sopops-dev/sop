@@ -180,6 +180,6 @@
     "name",
     "procedureSteps"
   ],
-  "title": "sopc SOP: procedures/<id>.yaml",
+  "title": "sop SOP: procedures/<id>.yaml",
   "type": "object"
 }

@@ -104,7 +104,7 @@ fn locked_is_no_longer_a_field_and_says_to_migrate() {
     assert_eq!(issues[0].path, "instructions/brand-voice.md");
     assert_eq!(
         issues[0].message,
-        "`locked` is no longer part of the format; run `sopc migrate` to remove it from this folder (or delete the line)"
+        "`locked` is no longer part of the format; run `sop migrate` to remove it from this folder (or delete the line)"
     );
     assert_eq!(issues[1].path, "procedures/reservations.yaml");
     // A Markdown SOP's front matter: see markdown_formatting_checks_report_code_and_line.
@@ -130,7 +130,7 @@ fn unknown_block() {
 fn groups_expand_in_place_and_nest() {
     let r = Repo::new();
     r.append(
-        "sopc.yaml",
+        "sop.yaml",
         "\ngroups:\n  voice: [brand-voice]\n  host:\n    - restaurant-host\n    - voice\n  ordering:\n    - allergen-check\n    - delivery-handling\n",
     );
     let before = build(r.root());
@@ -160,7 +160,7 @@ fn groups_expand_in_place_and_nest() {
 fn group_problems() {
     let group = |yaml: &str| {
         let r = Repo::new();
-        r.append("sopc.yaml", &format!("\ngroups:\n{yaml}"));
+        r.append("sop.yaml", &format!("\ngroups:\n{yaml}"));
         let issues = validate(&ws(r.root()));
         issues.into_iter().filter(|i| !i.warning).map(|i| (i.code, i.message)).collect::<Vec<_>>()
     };
@@ -179,7 +179,7 @@ fn group_problems() {
 #[test]
 fn a_block_twice_in_an_agent_is_an_error() {
     let r = Repo::new();
-    r.append("sopc.yaml", "\ngroups:\n  core:\n    - brand-voice\n    - allergen-check\n");
+    r.append("sop.yaml", "\ngroups:\n  core:\n    - brand-voice\n    - allergen-check\n");
     r.edit("agents/tonys-pizza.yaml", "  - delivery-handling\n", "  - core\n  - delivery-handling\n");
     let issues = render_workspace(&ws(r.root())).err().unwrap().0;
     assert_eq!(codes(&issues), ["duplicate_block", "duplicate_block"]);
@@ -201,7 +201,7 @@ fn blocks_can_be_an_inline_list_or_a_bullet_list() {
         "blocks:\n  - restaurant-host\n  - brand-voice\n  - allergen-check\n  - reservations\n  - closing\n",
         "blocks: [restaurant-host, brand-voice, allergen-check, reservations, closing]\n",
     );
-    r.append("sopc.yaml", "\ngroups:\n  a: [brand-voice, closing]\n  b:\n    - brand-voice\n    - closing\n");
+    r.append("sop.yaml", "\ngroups:\n  a: [brand-voice, closing]\n  b:\n    - brand-voice\n    - closing\n");
     let after = build(r.root());
     assert_eq!(after.agents["sakura-sushi"].prompt, before.agents["sakura-sushi"].prompt);
     let w = ws(r.root());
@@ -228,7 +228,7 @@ fn old_format_fields_say_to_migrate() {
         assert_eq!(issues[0].path, rel);
         assert_eq!(
             issues[0].message,
-            format!("{field} is from the old format; run `sopc migrate` to convert this folder")
+            format!("{field} is from the old format; run `sop migrate` to convert this folder")
         );
     };
     check("agents/tonys-pizza.yaml", "context: |", "inherits: [pizza-context]\ncontext: |", "`inherits`");
@@ -236,7 +236,7 @@ fn old_format_fields_say_to_migrate() {
     check("agents/tonys-pizza.yaml", "context: |", "instructions: |", "`instructions`");
     check("procedures/reservations.yaml", "name: Reservations", "name: Reservations\nagents: \"*\"", "`agents`");
     check("procedures/reservations.yaml", "name: Reservations", "name: Reservations\nexclude: [x]", "`exclude`");
-    check("sopc.yaml", "version: 1", "version: 1\nsop_order: [allergen-check]", "`sop_order`");
+    check("sop.yaml", "version: 1", "version: 1\nsop_order: [allergen-check]", "`sop_order`");
     for field in ["agents: \"*\"", "exclude: [x]", "inherits: [x]", "position: bottom"] {
         let name = field.split(':').next().unwrap();
         check("instructions/closing.md", "Before", &format!("---\n{field}\n---\nBefore"), &format!("`{name}`"));
@@ -249,7 +249,7 @@ fn old_format_fields_say_to_migrate() {
     std::fs::rename(r.path("instructions/closing.md"), r.path("bases/closing.md")).unwrap();
     let issues = load_issues(r.root());
     assert_eq!((issues[0].code, issues[0].path.as_str()), ("old_format", "bases"));
-    assert!(issues[0].message.contains("run `sopc migrate`"));
+    assert!(issues[0].message.contains("run `sop migrate`"));
 }
 
 #[test]
@@ -449,10 +449,10 @@ fn missing_config() {
 #[test]
 fn legacy_config_name_says_to_rename_it() {
     let r = Repo::new();
-    std::fs::rename(r.root().join("sopc.yaml"), r.root().join("opensop.yaml")).unwrap();
+    std::fs::rename(r.root().join("sop.yaml"), r.root().join("opensop.yaml")).unwrap();
     let issues = load_issues(r.root());
     assert_eq!(codes(&issues), ["missing_config"]);
-    assert!(issues[0].message.contains("rename opensop.yaml to sopc.yaml"), "{}", issues[0].message);
+    assert!(issues[0].message.contains("rename opensop.yaml to sop.yaml"), "{}", issues[0].message);
 }
 
 // --- rendering -------------------------------------------------------------------------------------
@@ -526,7 +526,7 @@ fn sops_heading_goes_once_before_the_first_sop() {
     let prompt = build(r.root()).agents["sakura-sushi"].prompt.clone();
     assert!(prompt.starts_with("Sakura is an omakase and sushi counter in Manhattan. Reservations strongly recommended. No delivery.\n\n## Procedures\n\n### Allergen check\n"), "{prompt}");
     // An empty heading leaves it out.
-    r.append("sopc.yaml", "\nsops_heading: \"\"\n");
+    r.append("sop.yaml", "\nsops_heading: \"\"\n");
     let prompt = build(r.root()).agents["sakura-sushi"].prompt.clone();
     assert!(!prompt.contains("## Procedures") && prompt.contains("No delivery.\n\n### Allergen check\n"), "{prompt}");
 }
@@ -711,26 +711,23 @@ fn plan_reports_blocks_an_agent_adds_or_removes() {
 }
 
 #[test]
-fn plan_attributes_group_changes_to_sopc_yaml() {
+fn plan_attributes_group_changes_to_sop_yaml() {
     let r = Repo::new();
-    r.append("sopc.yaml", "\ngroups:\n  end:\n    - reservations\n    - closing\n");
+    r.append("sop.yaml", "\ngroups:\n  end:\n    - reservations\n    - closing\n");
     r.edit("agents/sakura-sushi.yaml", "  - reservations\n  - closing\n", "  - end\n");
     let before = snapshot(&build(r.root()));
-    r.edit("sopc.yaml", "    - reservations\n    - closing\n", "    - closing\n    - reservations\n");
+    r.edit("sop.yaml", "    - reservations\n    - closing\n", "    - closing\n    - reservations\n");
     let plan = make_plan(&before, &snapshot(&build(r.root())));
-    assert_eq!(groups(&plan), [("workspace:sopc.yaml".into(), "edited", strings(&["sakura-sushi"]))]);
+    assert_eq!(groups(&plan), [("workspace:sop.yaml".into(), "edited", strings(&["sakura-sushi"]))]);
 }
 
 #[test]
 fn plan_attributes_default_variable_changes_to_workspace() {
     let r = Repo::new();
     let before = snapshot(&build(r.root()));
-    r.edit("sopc.yaml", "the manager on duty", "the shift lead");
+    r.edit("sop.yaml", "the manager on duty", "the shift lead");
     let plan = make_plan(&before, &snapshot(&build(r.root())));
-    assert_eq!(
-        groups(&plan),
-        [("workspace:sopc.yaml".into(), "edited", strings(&["luigis-trattoria", "tonys-pizza"]))]
-    );
+    assert_eq!(groups(&plan), [("workspace:sop.yaml".into(), "edited", strings(&["luigis-trattoria", "tonys-pizza"]))]);
 }
 
 #[test]
@@ -788,7 +785,7 @@ fn affected_without_a_base_is_every_agent() {
 }
 
 #[test]
-fn affected_requested_by_sopc_id_or_platform_id() {
+fn affected_requested_by_sop_id_or_platform_id() {
     let r = Repo::new();
     r.edit("agents/luigis-trattoria.yaml", "livekit: luigis-trattoria", "vapi: asst_9f3e");
     let head = build(r.root());
@@ -1015,7 +1012,7 @@ fn compare_reports_changed_missing_and_reworded() {
     assert!(results["tonys-pizza"].reworded.iter().any(|(u, _)| u.starts_with("ALLERGIES:")));
     for r in results.values() {
         assert!(!r.ok() || (r.agent == "tonys-pizza" && r.changed.is_empty()), "{} should not be ok", r.agent);
-        assert!(!r.added.iter().any(|u| u.contains("tool.")), "sopc's own tool lines are not 'added'");
+        assert!(!r.added.iter().any(|u| u.contains("tool.")), "sop's own tool lines are not 'added'");
     }
 }
 
@@ -1185,7 +1182,7 @@ fn lint_matches_the_naive_lint_on_a_generated_workspace() {
     let root = dir.path();
     let sentences = generated_sentences(150);
     let mut chunks = sentences.chunks(4);
-    std::fs::write(root.join("sopc.yaml"), "version: 1\n").unwrap();
+    std::fs::write(root.join("sop.yaml"), "version: 1\n").unwrap();
     for sub in ["instructions", "procedures", "agents"] {
         std::fs::create_dir(root.join(sub)).unwrap();
     }
@@ -1250,7 +1247,7 @@ fn fields_match_the_published_schemas() {
         ("instruction.schema.json", &INSTRUCTION_FIELDS[..INSTRUCTION_FIELDS.len() - 1], &[][..]), // "text" is the body
         ("sop.schema.json", SOP_FIELDS, SOP_REQUIRED),
         ("agent.schema.json", AGENT_FIELDS, &[][..]),
-        ("sopc.schema.json", CONFIG_FIELDS, &[][..]),
+        ("config.schema.json", CONFIG_FIELDS, &[][..]),
     ] {
         let s = schema(file);
         assert_eq!(keys(&s["properties"]), fields, "{file} properties");
@@ -1260,7 +1257,7 @@ fn fields_match_the_published_schemas() {
     assert_eq!(list(&sop["properties"]["delivery"]["enum"]), DELIVERIES);
     assert_eq!(keys(&sop["$defs"]["Step"]["properties"]), STEP_FIELDS);
     assert_eq!(list(&sop["$defs"]["Step"]["required"]), STEP_REQUIRED);
-    assert_eq!(schema("sopc.schema.json")["properties"]["version"]["const"], 1);
+    assert_eq!(schema("config.schema.json")["properties"]["version"]["const"], 1);
     let agent = schema("agent.schema.json");
     assert!(PLATFORMS.iter().all(|p| agent["properties"].get(*p).is_some()));
 }
@@ -1531,7 +1528,7 @@ blocks:
 variables:
   restaurant_name: Sakura Sushi
   menu_allergen_link: sakurasushi.nyc/allergens
-  staff_transfer: the head chef # overrides the default in sopc.yaml
+  staff_transfer: the head chef # overrides the default in sop.yaml
 "
     );
     assert!(!m.files.keys().any(|p| p.starts_with("bases/")));

@@ -2,7 +2,7 @@ name: drift check
 
 # Every night, compares each agent's live prompt on ElevenLabs, Vapi and Retell with the one
 # compiled from this repo, and fails if they differ. A failure means someone edited a prompt in a
-# platform's dashboard; the next deploy would undo that edit unless it's copied into the sopc files.
+# platform's dashboard; the next deploy would undo that edit unless it's copied into the sop files.
 on:
   schedule:
     - cron: "0 6 * * *" # 06:00 UTC daily
@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 env:
-  SOPC_ROOT: "" # your sopc folder; blank = sops/ (or the repo root if sopc.yaml is there)
-  SOPC_VERSION: "" # a sopc release tag with `verify`; blank = the latest release
+  SOP_ROOT: "" # your sop folder; blank = sops/ (or the repo root if sop.yaml is there)
+  SOP_VERSION: "" # a sop release tag with `verify`; blank = the latest release
 
 jobs:
   verify:
@@ -21,9 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # the default branch: what the next deploy would ship
 
-      - name: Install sopc
+      - name: Install sop
         run: |
-          curl -fsSL https://raw.githubusercontent.com/amanmibra/sopc/main/install.sh | SOPC_REF="$SOPC_VERSION" sh
+          curl -fsSL https://raw.githubusercontent.com/sopops-dev/sop/main/install.sh | SOP_REF="$SOP_VERSION" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Compare live prompts with the build
@@ -34,7 +34,7 @@ jobs:
           RETELL_API_KEY: ${{ secrets.RETELL_API_KEY }}
         run: |
           set -o pipefail
-          sopc verify ${SOPC_ROOT:+--dir "$SOPC_ROOT"} | tee verify.txt
+          sop verify ${SOP_ROOT:+--dir "$SOP_ROOT"} | tee verify.txt
       - name: Summary
         if: always()
         run: |

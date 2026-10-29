@@ -1,6 +1,6 @@
-# yaml-language-server: $schema=../../../spec/sopc.schema.json
+# yaml-language-server: $schema=../../../spec/config.schema.json
 #
-# sopc.yaml marks the root of a sopc folder. Every field is optional.
+# sop.yaml marks the root of a sop folder. Every field is optional.
 
 version: 1
 

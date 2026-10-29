@@ -13,12 +13,12 @@ if (!agentName) throw new Error('Set AGENT_NAME, e.g. AGENT_NAME=tonys-pizza');
 
 // Read once at startup. The prompt only changes when a new build is deployed.
 const instructions = loadInstructions(agentName);
-console.log(`sopc: ${instructions.id} prompt ${instructions.hash.slice(0, 12)}`);
+console.log(`sop: ${instructions.id} prompt ${instructions.hash.slice(0, 12)}`);
 
 export default defineAgent({
   entry: async (ctx: JobContext) => {
     const session = new voice.AgentSession({
-      // Use whatever STT / LLM / TTS you already run; sopc only supplies `instructions`.
+      // Use whatever STT / LLM / TTS you already run; sop only supplies `instructions`.
       stt: new inference.STT({ model: 'assemblyai/universal-3-5-pro', language: 'en' }),
       llm: new inference.LLM({ model: 'google/gemma-4-31b-it' }),
       tts: new inference.TTS({ model: 'fishaudio/s2.1-pro', voice: 'fa4c9eb3dccc4806b382b40d61c6b10a' }),

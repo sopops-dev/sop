@@ -1,5 +1,5 @@
 //! SOP files in Markdown (procedures/<id>.md), and the canonical text of both SOP formats that
-//! `sopc fmt` and `sopc convert` write.
+//! `sop fmt` and `sop convert` write.
 //!
 //! A Markdown SOP is optional front matter with settings only, one `# name` heading, the
 //! `**Goal:**` and `**When:**` fields, guidance paragraphs, and the `## Steps`, `## Never` and

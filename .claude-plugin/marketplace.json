@@ -1,12 +1,12 @@
 {
-  "name": "sopc",
+  "name": "sop",
   "owner": { "name": "Aman Ibrahim", "url": "https://github.com/amanmibra" },
-  "description": "sopc, the SOP compiler: modular, git-versioned instructions for teams managing multiple task-driven agents",
+  "description": "sop, the SOP compiler: modular, git-versioned instructions for teams managing multiple task-driven agents",
   "plugins": [
     {
-      "name": "sopc",
+      "name": "sop",
       "source": "./",
-      "description": "Import existing agent prompts into sopc: /sopc:sopc-import"
+      "description": "Import existing agent prompts into sop: /sop:sop-import"
     }
   ]
 }

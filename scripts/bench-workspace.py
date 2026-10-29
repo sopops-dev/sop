@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates a large sopc workspace in a git repo, for benchmarking `sopc`, `lint`, `plan` and
+"""Generates a large sop workspace in a git repo, for benchmarking `sop`, `lint`, `plan` and
 `affected`.
 
     python3 scripts/bench-workspace.py /tmp/bench [--agents 300] [--instructions 200]
@@ -63,7 +63,7 @@ def main():
         with open(os.path.join(root, rel), "w") as f:
             f.write(text)
 
-    write("sopc.yaml", "version: 1\nvariables:\n  staff_transfer: the manager on duty\n")
+    write("sop.yaml", "version: 1\nvariables:\n  staff_transfer: the manager on duty\n")
     pool = []  # sentences, so some blocks repeat or contradict others
     for i in range(a.instructions):
         lines = []
@@ -106,10 +106,10 @@ def main():
         git("add", "-A")
         git("-c", "user.name=bench", "-c", "user.email=bench@example.com", "commit", "-qm", f"edit {c}")
     print(f"wrote {root}; try:")
-    print(f"  sopc --dir {root} -o {a.dir}/out")
-    print(f"  sopc lint --dir {root}")
-    print(f"  sopc plan --summary --dir {root} --against HEAD~{a.commits}")
-    print(f"  sopc affected --dir {root} --against HEAD~{a.commits}")
+    print(f"  sop --dir {root} -o {a.dir}/out")
+    print(f"  sop lint --dir {root}")
+    print(f"  sop plan --summary --dir {root} --against HEAD~{a.commits}")
+    print(f"  sop affected --dir {root} --against HEAD~{a.commits}")
 
 
 if __name__ == "__main__":

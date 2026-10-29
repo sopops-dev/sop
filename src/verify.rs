@@ -1,11 +1,11 @@
-//! `sopc verify`: fetches each agent's live prompt from its platform and compares it with the
+//! `sop verify`: fetches each agent's live prompt from its platform and compares it with the
 //! compiled one, to catch hotfixes made in a platform's dashboard that git doesn't have.
 //!
 //! It also checks that every tool the agent's SOPs name exists on the live agent, reading the
 //! tool list from the same responses where the platform includes it.
 //!
 //! Read-only: only GET requests are sent. Base URLs can be overridden for tests and proxies
-//! (`SOPC_ELEVENLABS_URL`, `SOPC_VAPI_URL`, `SOPC_RETELL_URL`).
+//! (`SOP_ELEVENLABS_URL`, `SOP_VAPI_URL`, `SOP_RETELL_URL`; the old `SOPC_*` names still work).
 
 use crate::plan::labelled_diff;
 use crate::render::Build;
@@ -30,15 +30,15 @@ struct Api {
 const ELEVENLABS: Api = Api {
     name: "ElevenLabs",
     key_var: "ELEVENLABS_API_KEY",
-    url_var: "SOPC_ELEVENLABS_URL",
+    url_var: "SOP_ELEVENLABS_URL",
     default_url: "https://api.elevenlabs.io",
 };
 const VAPI: Api =
-    Api { name: "Vapi", key_var: "VAPI_API_KEY", url_var: "SOPC_VAPI_URL", default_url: "https://api.vapi.ai" };
+    Api { name: "Vapi", key_var: "VAPI_API_KEY", url_var: "SOP_VAPI_URL", default_url: "https://api.vapi.ai" };
 const RETELL: Api = Api {
     name: "Retell",
     key_var: "RETELL_API_KEY",
-    url_var: "SOPC_RETELL_URL",
+    url_var: "SOP_RETELL_URL",
     default_url: "https://api.retellai.com",
 };
 
@@ -109,7 +109,7 @@ pub struct Tools {
     pub missing: Vec<Missing>,
     /// On the platform but named by no SOP: information only.
     pub unreferenced: Vec<String>,
-    /// Referenced and not listed, but the agent has tools sopc can't list (MCP servers, shared
+    /// Referenced and not listed, but the agent has tools sop can't list (MCP servers, shared
     /// tools), so they may exist: doesn't fail.
     pub unconfirmed: Vec<String>,
     /// Why some tools can't be listed, or why tools weren't checked at all.
@@ -172,7 +172,7 @@ pub struct LiveTools {
     pub names: BTreeSet<String>,
     /// Tool ids still to be looked up by name (ElevenLabs workspace tools, Vapi saved tools).
     pub ids: BTreeSet<String>,
-    /// Set when the agent also has tools sopc can't list (why).
+    /// Set when the agent also has tools sop can't list (why).
     pub opaque: Option<String>,
 }
 
@@ -467,7 +467,7 @@ impl LiveTools {
     }
 }
 
-const MCP: &str = "the agent uses MCP servers, whose tools sopc can't list";
+const MCP: &str = "the agent uses MCP servers, whose tools sop can't list";
 
 /// A non-empty string field.
 fn str_of<'a>(v: &'a Json, key: &str) -> Option<&'a str> {
@@ -570,9 +570,16 @@ fn client() -> ureq::Agent {
     let config = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
         .http_status_as_error(false)
-        .user_agent(concat!("sopc/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("sop/", env!("CARGO_PKG_VERSION")))
         .build();
     config.into()
+}
+
+/// A `SOP_*` variable when set (and not blank), else the `SOPC_*` name it had before the CLI was
+/// renamed from sopc to sop.
+fn env_with_fallback(var: &str) -> Option<String> {
+    let set = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
+    set(var).or_else(|| var.strip_prefix("SOP_").and_then(|rest| set(&format!("SOPC_{rest}"))))
 }
 
 /// GETs `path` from a platform and parses the JSON body. Errors are one plain line; the key is
@@ -582,7 +589,7 @@ fn get(http: &ureq::Agent, api: &Api, path: &str, header: &str, prefix: &str) ->
     if key.trim().is_empty() {
         return Err(format!("{} is not set (needed to read {} agents)", api.key_var, api.name));
     }
-    let base = std::env::var(api.url_var).ok().filter(|u| !u.trim().is_empty());
+    let base = env_with_fallback(api.url_var);
     let base = base.as_deref().unwrap_or(api.default_url).trim_end_matches('/').to_string();
     let url = format!("{base}{path}");
     let mut resp = http
@@ -599,7 +606,7 @@ fn get(http: &ureq::Agent, api: &Api, path: &str, header: &str, prefix: &str) ->
         404 => return Err(format!("not found on {} (HTTP 404)", api.name)),
         _ => return Err(format!("{} returned HTTP {status}", api.name)),
     }
-    serde_json::from_str(&body).map_err(|e| format!("{} returned a response sopc can't read: {e}", api.name))
+    serde_json::from_str(&body).map_err(|e| format!("{} returned a response sop can't read: {e}", api.name))
 }
 
 /// A path segment with anything but unreserved characters percent-encoded.
@@ -764,7 +771,7 @@ pub fn retell_flow_tools(flow: &Json) -> LiveTools {
         }
         let Some(obj) = v.as_object() else { return };
         if v["tool_type"] == "shared" {
-            live.opaque = Some("the flow uses shared tools, which sopc doesn't look up".into());
+            live.opaque = Some("the flow uses shared tools, which sop doesn't look up".into());
         }
         for (key, value) in obj {
             if key == "tools" {

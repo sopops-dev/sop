@@ -1,4 +1,4 @@
-//! `sopc migrate`: converts a folder from the format of sopc v0.0.8 and earlier, where bases and SOPs chose
+//! `sop migrate`: converts a folder from the format of sopc v0.0.8 and earlier, where bases and SOPs chose
 //! their agents (`agents`, `exclude`, `inherits`, `position`, `sop_order`), to the current one,
 //! where each agent lists its blocks in order. It also removes fields the format no longer has
 //! (`locked`, from v0.0.9 and earlier).
@@ -11,7 +11,7 @@
 use crate::model::{self, Agent, Sop};
 use crate::render::{fill_json, fill_variables, render_sop_in_prompt, render_workspace, sop_payload, sop_tools};
 use crate::sopfile::{kv, lost_comments, scalar};
-use crate::workspace::{load_files, load_yaml, parse_sop_file, split_front_matter, stem, Issue, Issues, CONFIG};
+use crate::workspace::{load_files, load_yaml, parse_sop_file, split_front_matter, stem, Issue, Issues};
 use regex::Regex;
 use serde_json::{Map, Value as Json};
 use serde_yaml_ng::{Mapping, Value};
@@ -59,7 +59,7 @@ pub fn is_old(files: &BTreeMap<String, String>) -> bool {
     reports(files, "old_format")
 }
 
-/// Whether `sopc migrate` has something to do: the old format, or fields the format no longer has.
+/// Whether `sop migrate` has something to do: the old format, or fields the format no longer has.
 pub fn needs_migrating(files: &BTreeMap<String, String>) -> bool {
     is_old(files) || reports(files, "removed_field")
 }
@@ -337,7 +337,9 @@ fn migrate_old(files: &BTreeMap<String, String>) -> Result<Migration, Issues> {
         let msg = "instructions/ already exists: this folder is partly migrated; finish it by hand (see FORMAT.md)";
         return Err(Issues(vec![failed("instructions", msg)]));
     }
-    let Some(config_text) = files.get(CONFIG) else { return Err(crate::workspace::missing_config(files)) };
+    let Some((config_file, config_text)) = crate::workspace::config_file(files) else {
+        return Err(crate::workspace::missing_config(files));
+    };
     let mut m = Migration::default();
     let mut new_files: BTreeMap<String, String> = files.clone();
     let mut edit = |m: &mut Migration, path: &str, new_path: &str, text: String, what: String| {
@@ -365,15 +367,15 @@ fn migrate_old(files: &BTreeMap<String, String>) -> Result<Migration, Issues> {
         }
     }
 
-    // sopc.yaml
-    let Some(config_map) = load_yaml(config_text, CONFIG, &mut issues) else { return Err(Issues(issues)) };
+    // sop.yaml
+    let Some(config_map) = load_yaml(config_text, config_file, &mut issues) else { return Err(Issues(issues)) };
     let order = texts(&config_map, "sop_order");
     let config_new = remove_keys(config_text, model::OLD_CONFIG_FIELDS) + "\n";
-    check_edit(CONFIG, &config_map, &config_new, model::OLD_CONFIG_FIELDS, &Mapping::new(), &mut issues);
+    check_edit(config_file, &config_map, &config_new, model::OLD_CONFIG_FIELDS, &Mapping::new(), &mut issues);
     let config = match model::parse_config(&without(&config_map, model::OLD_CONFIG_FIELDS)) {
         Ok(c) => c,
         Err(errs) => {
-            issues.extend(errs.into_iter().map(|e| failed(CONFIG, e)));
+            issues.extend(errs.into_iter().map(|e| failed(config_file, e)));
             model::Config::default()
         }
     };
@@ -453,7 +455,7 @@ fn migrate_old(files: &BTreeMap<String, String>) -> Result<Migration, Issues> {
     }
 
     // The edits.
-    edit(&mut m, CONFIG, CONFIG, config_new, removed_note(&config_map, model::OLD_CONFIG_FIELDS));
+    edit(&mut m, config_file, config_file, config_new, removed_note(&config_map, model::OLD_CONFIG_FIELDS));
     for (path, map) in &base_meta {
         let id = stem(path);
         let keys = [model::OLD_INSTRUCTION_FIELDS, model::REMOVED_FIELDS].concat();
@@ -609,7 +611,7 @@ pub fn convert(files: BTreeMap<String, String>) -> Result<BTreeMap<String, Strin
     Ok(migrate(&files)?.files)
 }
 
-/// The plan `sopc migrate` prints; `show` turns a path in the folder into one to print.
+/// The plan `sop migrate` prints; `show` turns a path in the folder into one to print.
 pub fn plan_text(m: &Migration, root: &str, show: &dyn Fn(&str) -> String) -> String {
     let n = m.changes.len();
     let mut out = vec![if m.removed_fields_only {

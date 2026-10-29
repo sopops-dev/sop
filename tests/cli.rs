@@ -1,4 +1,4 @@
-//! Tests of the sopc binary: commands, flags, exit codes and files it writes.
+//! Tests of the sop binary: commands, flags, exit codes and files it writes.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -22,8 +22,8 @@ struct Output {
     stderr: String,
 }
 
-fn sopc_in(dir: &Path, args: &[&str], env: &[(&str, &Path)]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_sopc"));
+fn sop_in(dir: &Path, args: &[&str], env: &[(&str, &Path)]) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_sop"));
     cmd.args(args).current_dir(dir).env_remove("GITHUB_OUTPUT").env_remove("GITHUB_STEP_SUMMARY");
     for (k, v) in env {
         cmd.env(k, v);
@@ -36,10 +36,10 @@ fn sopc_in(dir: &Path, args: &[&str], env: &[(&str, &Path)]) -> Output {
     }
 }
 
-/// Runs sopc and checks the exit code.
+/// Runs sop and checks the exit code.
 fn run(want: i32, args: &[&str]) -> Output {
-    let out = sopc_in(&repo_root(), args, &[]);
-    assert_eq!(out.code, want, "sopc {args:?}\nstdout: {}\nstderr: {}", out.stdout, out.stderr);
+    let out = sop_in(&repo_root(), args, &[]);
+    assert_eq!(out.code, want, "sop {args:?}\nstdout: {}\nstderr: {}", out.stdout, out.stderr);
     out
 }
 
@@ -91,38 +91,38 @@ fn compile_check_and_plan() {
     run(0, &["--dir", &root, "--check"]);
     edit(&Path::new(&root).join("instructions/closing.md"), "repeat the order total", "repeat the order and total");
     let out = run(1, &["--dir", &root, "--check"]);
-    assert!(out.stderr.contains("is out of date; run `sopc`"), "{}", out.stderr);
+    assert!(out.stderr.contains("is out of date; run `sop`"), "{}", out.stderr);
     // No --against: compares with main, the only branch.
-    let out = sopc_in(dir.path(), &["plan", "--summary"], &[]);
+    let out = sop_in(dir.path(), &["plan", "--summary"], &[]);
     assert!(out.stdout.contains("instruction `closing` edited → 3 agents"), "{}", out.stdout);
 }
 
 #[test]
 fn compile_prints_a_tidy_output_path() {
     let (dir, _) = repo();
-    let out = sopc_in(dir.path(), &["--dir", "./sops/"], &[]);
+    let out = sop_in(dir.path(), &["--dir", "./sops/"], &[]);
     assert_eq!(out.stdout, "wrote 6 files to sops/build\n");
 }
 
 #[test]
-fn bare_sopc_compiles_the_default_folder() {
+fn bare_sop_compiles_the_default_folder() {
     let (dir, _) = repo();
-    let out = sopc_in(dir.path(), &[], &[]);
+    let out = sop_in(dir.path(), &[], &[]);
     assert_eq!((out.code, out.stdout.as_str()), (0, "wrote 6 files to sops/build\n"), "{}", out.stderr);
-    let out = sopc_in(dir.path(), &["--check"], &[]);
+    let out = sop_in(dir.path(), &["--check"], &[]);
     assert_eq!((out.code, out.stdout.as_str()), (0, "sops/build is up to date\n"), "{}", out.stderr);
-    let out = sopc_in(dir.path(), &["-o", "dist"], &[]);
+    let out = sop_in(dir.path(), &["-o", "dist"], &[]);
     assert_eq!(out.stdout, "wrote 6 files to dist\n");
-    let out = sopc_in(dir.path(), &["--out", "dist", "--check"], &[]);
+    let out = sop_in(dir.path(), &["--out", "dist", "--check"], &[]);
     assert_eq!(out.stdout, "dist is up to date\n");
     for cmd in [&["validate"][..], &["lint"], &["fmt", "--check"], &["agents"]] {
-        assert_eq!(sopc_in(dir.path(), cmd, &[]).code, 0, "{cmd:?}");
+        assert_eq!(sop_in(dir.path(), cmd, &[]).code, 0, "{cmd:?}");
     }
     // An explicit folder wins over the default one.
-    let out = sopc_in(dir.path(), &["--dir", "sops", "-o", "elsewhere"], &[]);
+    let out = sop_in(dir.path(), &["--dir", "sops", "-o", "elsewhere"], &[]);
     assert_eq!(out.stdout, "wrote 6 files to elsewhere\n");
     let sops = dir.path().join("sops");
-    assert_eq!(sopc_in(&sops, &["--dir", "."], &[]).stdout, "wrote 6 files to build\n");
+    assert_eq!(sop_in(&sops, &["--dir", "."], &[]).stdout, "wrote 6 files to build\n");
 }
 
 #[test]
@@ -136,41 +136,41 @@ fn compile_keeps_files_it_did_not_build() {
     // A non-empty folder without lock.json is refused, unless --force.
     std::fs::create_dir(dir.path().join("docs")).unwrap();
     std::fs::write(dir.path().join("docs/notes.prompt.md"), "mine").unwrap();
-    let out = sopc_in(dir.path(), &["-o", "docs"], &[]);
+    let out = sop_in(dir.path(), &["-o", "docs"], &[]);
     assert_eq!(out.code, 1);
     assert!(out.stderr.contains("docs has files but no lock.json"), "{}", out.stderr);
     assert!(!dir.path().join("docs/lock.json").exists());
     assert_eq!(run_ok(dir.path(), &["-o", "docs", "--force"]).stdout, "wrote 6 files to docs\n");
     assert_eq!(read(&dir.path().join("docs/notes.prompt.md")), "mine");
     // --force is a compile flag.
-    assert_eq!(sopc_in(dir.path(), &["--force", "validate"], &[]).code, 2);
+    assert_eq!(sop_in(dir.path(), &["--force", "validate"], &[]).code, 2);
 }
 
 fn run_ok(dir: &Path, args: &[&str]) -> Output {
-    let out = sopc_in(dir, args, &[]);
-    assert_eq!(out.code, 0, "sopc {args:?}\nstdout: {}\nstderr: {}", out.stdout, out.stderr);
+    let out = sop_in(dir, args, &[]);
+    assert_eq!(out.code, 0, "sop {args:?}\nstdout: {}\nstderr: {}", out.stdout, out.stderr);
     out
 }
 
 #[test]
 fn default_folder_is_sops_then_the_current_one() {
     let (dir, _) = repo();
-    // sops/sopc.yaml wins even when ./sopc.yaml exists too.
+    // sops/sop.yaml wins even when ./sop.yaml exists too.
     copy_dir(&fixture().join("sops"), &dir.path().join("other"));
-    std::fs::copy(dir.path().join("sops/sopc.yaml"), dir.path().join("sopc.yaml")).unwrap();
-    assert_eq!(sopc_in(dir.path(), &[], &[]).stdout, "wrote 6 files to sops/build\n");
+    std::fs::copy(dir.path().join("sops/sop.yaml"), dir.path().join("sop.yaml")).unwrap();
+    assert_eq!(sop_in(dir.path(), &[], &[]).stdout, "wrote 6 files to sops/build\n");
     // Inside the folder itself, ./ is used.
     let other = dir.path().join("other");
-    assert_eq!(sopc_in(&other, &[], &[]).stdout, "wrote 6 files to build\n");
-    assert_eq!(sopc_in(&other, &["validate"], &[]).code, 0);
+    assert_eq!(sop_in(&other, &[], &[]).stdout, "wrote 6 files to build\n");
+    assert_eq!(sop_in(&other, &["validate"], &[]).code, 0);
     // Neither: an error that says what to pass.
     let empty = tempfile::tempdir().unwrap();
     for args in [&[][..], &["validate"], &["plan"], &["convert", "--to", "md"]] {
-        let out = sopc_in(empty.path(), args, &[]);
+        let out = sop_in(empty.path(), args, &[]);
         assert_eq!(out.code, 1, "{args:?}");
         assert!(
             out.stderr.contains(
-                "error [missing_config] no sopc.yaml in ./sops or ./ (pass the folder, e.g. `sopc --dir path/to/sops`)"
+                "error [missing_config] no sop.yaml in ./sops or ./ (pass the folder, e.g. `sop --dir path/to/sops`)"
             ),
             "{args:?}: {}",
             out.stderr
@@ -179,9 +179,9 @@ fn default_folder_is_sops_then_the_current_one() {
     // A default folder with the old config name still explains the rename.
     let legacy = tempfile::tempdir().unwrap();
     copy_dir(&fixture().join("sops"), &legacy.path().join("sops"));
-    std::fs::rename(legacy.path().join("sops/sopc.yaml"), legacy.path().join("sops/opensop.yaml")).unwrap();
-    let out = sopc_in(legacy.path(), &["validate"], &[]);
-    assert!(out.stderr.contains("rename opensop.yaml to sopc.yaml"), "{}", out.stderr);
+    std::fs::rename(legacy.path().join("sops/sop.yaml"), legacy.path().join("sops/opensop.yaml")).unwrap();
+    let out = sop_in(legacy.path(), &["validate"], &[]);
+    assert!(out.stderr.contains("rename opensop.yaml to sop.yaml"), "{}", out.stderr);
 }
 
 #[test]
@@ -189,16 +189,16 @@ fn the_folder_is_a_flag_on_every_command() {
     let (dir, _) = repo();
     // --dir / -C goes before or after the command.
     for args in [&["--dir", "sops", "validate"][..], &["validate", "--dir", "sops"], &["-C", "sops", "lint"]] {
-        assert_eq!(sopc_in(dir.path(), args, &[]).code, 0, "{args:?}");
+        assert_eq!(sop_in(dir.path(), args, &[]).code, 0, "{args:?}");
     }
     // Typos are unknown commands with a suggestion, never folders.
-    let out = sopc_in(dir.path(), &["valdate"], &[]);
+    let out = sop_in(dir.path(), &["valdate"], &[]);
     assert_eq!(out.code, 2);
     assert!(out.stderr.contains("a similar subcommand exists: 'validate'"), "{}", out.stderr);
-    let out = sopc_in(dir.path(), &["--dir", "nope"], &[]);
+    let out = sop_in(dir.path(), &["--dir", "nope"], &[]);
     assert!(out.stderr.contains("nope is not a folder"), "{}", out.stderr);
     // Compile-only flags can't be combined with a command.
-    let out = sopc_in(dir.path(), &["--check", "validate"], &[]);
+    let out = sop_in(dir.path(), &["--check", "validate"], &[]);
     assert_eq!(out.code, 2);
     assert!(out.stderr.contains("apply to compiling"), "{}", out.stderr);
 }
@@ -229,12 +229,12 @@ fn plan_and_affected_say_what_they_compared_with() {
     .unwrap();
     let line = format!("Comparing with main ({})\n", sha.trim());
     for args in [&["plan"][..], &["plan", "--json"], &["affected"], &["affected", "--against", "main"]] {
-        let out = sopc_in(dir.path(), args, &[]);
+        let out = sop_in(dir.path(), args, &[]);
         assert_eq!((out.code, out.stderr.as_str()), (0, line.as_str()), "{args:?}");
         assert!(!out.stdout.contains("Comparing"), "{args:?}: stdout stays clean");
     }
     let summary = dir.path().join("summary");
-    sopc_in(dir.path(), &["affected", "--ci"], &[("GITHUB_STEP_SUMMARY", &summary)]);
+    sop_in(dir.path(), &["affected", "--ci"], &[("GITHUB_STEP_SUMMARY", &summary)]);
     assert!(read(&summary).contains(&format!("Compared with `main ({})`.", sha.trim())), "{}", read(&summary));
 }
 
@@ -245,16 +245,16 @@ fn default_ref_prefers_origin_head_and_explicit_against_wins() {
     edit(&Path::new(&root).join("instructions/closing.md"), "repeat the order total", "repeat the order and total");
     git(dir.path(), &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "edit"]);
     // main is HEAD now: no change against it.
-    let out = sopc_in(dir.path(), &["plan", "--summary"], &[]);
+    let out = sop_in(dir.path(), &["plan", "--summary"], &[]);
     assert!(out.stdout.contains("No agent prompts change."), "{}", out.stdout);
-    let out = sopc_in(dir.path(), &["plan", "--summary", "--against", "trunk"], &[]);
+    let out = sop_in(dir.path(), &["plan", "--summary", "--against", "trunk"], &[]);
     assert!(out.stdout.contains("instruction `closing` edited → 3 agents"), "{}", out.stdout);
     // origin/HEAD, when set, comes before main.
     git(dir.path(), &["update-ref", "refs/remotes/origin/trunk", "trunk"]);
     git(dir.path(), &["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"]);
-    let out = sopc_in(dir.path(), &["affected"], &[]);
+    let out = sop_in(dir.path(), &["affected"], &[]);
     assert_eq!(out.stdout, "luigis-trattoria\nsakura-sushi\ntonys-pizza\n", "{}", out.stderr);
-    let out = sopc_in(dir.path(), &["affected", "--against", "main"], &[]);
+    let out = sop_in(dir.path(), &["affected", "--against", "main"], &[]);
     assert_eq!(out.stdout, "");
 }
 
@@ -269,7 +269,7 @@ fn plan_against_a_git_ref() {
     let out = run(0, &["plan", "--dir", &root, "--against", "main", "--summary"]);
     assert!(out.stdout.contains("SOP `allergen-check` edited → 3 agents"), "{}", out.stdout);
     let out = run(1, &["plan", "--dir", &root, "--against", "nope"]);
-    let want = "sopc: error: unknown git ref `nope`; check the name, or fetch it (`git fetch origin nope`)\n";
+    let want = "sop: error: unknown git ref `nope`; check the name, or fetch it (`git fetch origin nope`)\n";
     assert_eq!(out.stderr, want);
     let out = run(1, &["affected", "--dir", &root, "--against", "origin/nope"]);
     assert!(out
@@ -279,13 +279,13 @@ fn plan_against_a_git_ref() {
     let (_dir, root) = repo();
     for cmd in ["plan", "affected"] {
         let out = run(1, &[cmd, "--dir", &root, "--against", "main"]);
-        assert_eq!(out.stderr, "sopc: error: not a git repository; --against needs git\n", "{cmd}");
+        assert_eq!(out.stderr, "sop: error: not a git repository; --against needs git\n", "{cmd}");
     }
 }
 
 #[test]
 fn plan_reads_every_file_at_a_ref() {
-    // CRLF text, non-UTF-8 and non-source files, and files outside the sopc folder, all at once.
+    // CRLF text, non-UTF-8 and non-source files, and files outside the sop folder, all at once.
     let (dir, root) = repo();
     let host = Path::new(&root).join("instructions/restaurant-host.md");
     std::fs::write(&host, read(&host).replace('\n', "\r\n")).unwrap();
@@ -304,15 +304,70 @@ fn plan_reads_every_file_at_a_ref() {
 #[test]
 fn plan_against_a_ref_from_before_the_rename() {
     let (dir, root) = repo();
-    std::fs::rename(Path::new(&root).join("sopc.yaml"), Path::new(&root).join("opensop.yaml")).unwrap();
+    std::fs::rename(Path::new(&root).join("sop.yaml"), Path::new(&root).join("opensop.yaml")).unwrap();
     git(dir.path(), &["init", "-q", "-b", "main"]);
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"]);
     let out = run(1, &["validate", "--dir", &root]);
-    assert!(out.stderr.contains("rename opensop.yaml to sopc.yaml"), "{}", out.stderr);
-    git(dir.path(), &["mv", "sops/opensop.yaml", "sops/sopc.yaml"]);
+    assert!(out.stderr.contains("rename opensop.yaml to sop.yaml"), "{}", out.stderr);
+    git(dir.path(), &["mv", "sops/opensop.yaml", "sops/sop.yaml"]);
     let out = run(0, &["plan", "--dir", &root, "--against", "main", "--summary"]);
     assert!(out.stdout.contains("No agent prompts change."), "{}", out.stdout);
+}
+
+#[test]
+fn sopc_yaml_still_works_without_sop_yaml() {
+    // A folder from before the CLI was renamed from sopc to sop builds unchanged, silently.
+    let (dir, root) = repo();
+    let root = Path::new(&root);
+    std::fs::rename(root.join("sop.yaml"), root.join("sopc.yaml")).unwrap();
+    let out = sop_in(dir.path(), &[], &[]);
+    assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "wrote 6 files to sops/build\n", ""));
+    for entry in std::fs::read_dir(fixture().join("expected")).unwrap() {
+        let p = entry.unwrap().path();
+        let name = p.file_name().unwrap();
+        assert_eq!(read(&root.join("build").join(name)), read(&p), "{}", name.to_string_lossy());
+    }
+    let out = sop_in(dir.path(), &["validate"], &[]);
+    assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "0 error(s), 0 warning(s)\n", ""));
+    for cmd in [&["lint"][..], &["fmt", "--check"], &["agents"], &["export"], &["--check"]] {
+        assert_eq!(sop_in(dir.path(), cmd, &[]).code, 0, "{cmd:?}");
+    }
+    // Issues about the config name the file that is there.
+    std::fs::write(root.join("sopc.yaml"), read(&root.join("sopc.yaml")) + "\ngroups:\n  g: [nope]\n").unwrap();
+    let out = sop_in(dir.path(), &["validate"], &[]);
+    assert!(out.stderr.contains("sops/sopc.yaml: error [unknown_block]"), "{}", out.stderr);
+
+    // Both: sop.yaml wins, and sopc.yaml is ignored.
+    std::fs::copy(fixture().join("sops/sop.yaml"), root.join("sop.yaml")).unwrap();
+    let out = sop_in(dir.path(), &["validate"], &[]);
+    assert_eq!((out.code, out.stdout.as_str()), (0, "0 error(s), 0 warning(s)\n"), "{}", out.stderr);
+}
+
+#[test]
+fn plan_against_a_ref_with_sopc_yaml() {
+    let (dir, root) = repo();
+    std::fs::rename(Path::new(&root).join("sop.yaml"), Path::new(&root).join("sopc.yaml")).unwrap();
+    git(dir.path(), &["init", "-q", "-b", "main"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"]);
+    let out = run(0, &["plan", "--dir", &root, "--against", "main", "--summary"]);
+    assert!(out.stdout.contains("No agent prompts change."), "{}", out.stdout);
+    git(dir.path(), &["mv", "sops/sopc.yaml", "sops/sop.yaml"]);
+    let out = run(0, &["plan", "--dir", &root, "--against", "main", "--summary"]);
+    assert!(out.stdout.contains("No agent prompts change."), "{}", out.stdout);
+}
+
+#[test]
+fn migrate_keeps_a_sopc_yaml_name() {
+    let (dir, root) = old_repo("restaurants");
+    let root = Path::new(&root);
+    std::fs::rename(root.join("sop.yaml"), root.join("sopc.yaml")).unwrap();
+    let out = run_ok(dir.path(), &["migrate", "--yes"]);
+    assert!(out.stdout.contains("sops/sopc.yaml"), "{}", out.stdout);
+    assert!(!root.join("sop.yaml").exists());
+    assert!(!read(&root.join("sopc.yaml")).contains("sop_order"));
+    run_ok(dir.path(), &["validate"]);
 }
 
 #[test]
@@ -335,7 +390,7 @@ fn validate_reports_errors() {
     std::fs::remove_file(Path::new(&root).join("agents/broken.yaml")).unwrap();
     // Paths are printed from the current folder, for validate and the commands that load files.
     for args in [&["validate"][..], &["agents"], &[]] {
-        let out = sopc_in(dir.path(), args, &[]);
+        let out = sop_in(dir.path(), args, &[]);
         assert!(
             out.stderr.starts_with("sops/agents/tonys-pizza.yaml: error [unknown_block]"),
             "{args:?}: {}",
@@ -412,7 +467,7 @@ fn convert_round_trip_keeps_every_prompt_and_tool_json() {
 fn convert_some_sops_and_unknown_ids() {
     let (dir, root) = repo();
     // Paths are printed from the current folder.
-    let out = sopc_in(dir.path(), &["convert", "--to", "md", "reservations"], &[]);
+    let out = sop_in(dir.path(), &["convert", "--to", "md", "reservations"], &[]);
     assert_eq!(out.stdout, "converted sops/procedures/reservations.yaml -> sops/procedures/reservations.md\n");
     assert!(sop_files(&root).contains(&"allergen-check.yaml".to_string()));
     let names = std::fs::read_dir(Path::new(&root).join("procedures")).unwrap();
@@ -435,15 +490,15 @@ fn fmt_check_exit_codes() {
     let messy = read(&file);
     run(0, &["fmt", "--dir", &root]); // YAML isn't touched without --yaml
     assert_eq!(read(&file), messy);
-    let out = sopc_in(dir.path(), &["fmt", "--check", "--yaml"], &[]);
+    let out = sop_in(dir.path(), &["fmt", "--check", "--yaml"], &[]);
     assert_eq!((out.code, out.stdout.as_str()), (1, "would reformat sops/procedures/reservations.yaml\n"));
     assert_eq!(read(&file), messy, "--check writes nothing");
-    let out = sopc_in(&Path::new(&root).join("procedures"), &["fmt", "-C", "..", "--yaml"], &[]);
+    let out = sop_in(&Path::new(&root).join("procedures"), &["fmt", "-C", "..", "--yaml"], &[]);
     assert!(out.stdout.starts_with("formatted ../procedures/reservations.yaml\n"), "{}", out.stdout);
     assert!(read(&file).starts_with("name: Reservations\ndescription:"));
     run(0, &["fmt", "--dir", &root, "--check", "--yaml"]);
     std::fs::write(Path::new(&root).join("procedures/broken.md"), "# Broken\n## Notes\n").unwrap();
-    let out = sopc_in(dir.path(), &["fmt"], &[]);
+    let out = sop_in(dir.path(), &["fmt"], &[]);
     assert!(out.stderr.starts_with("sops/procedures/broken.md: error [md_unknown_section] line 2:"), "{}", out.stderr);
 }
 
@@ -455,8 +510,8 @@ fn guide_prints_the_format_reference() {
 
 #[test]
 fn printed_docs_link_absolutely() {
-    // `sopc guide` and installed skills are read inside other repos, where relative links are dead.
-    for file in ["FORMAT.md", "skills/sopc-import/SKILL.md"] {
+    // `sop guide` and installed skills are read inside other repos, where relative links are dead.
+    for file in ["FORMAT.md", "skills/sop-import/SKILL.md"] {
         let text = read(&repo_root().join(file));
         for (i, _) in text.match_indices("](") {
             let target = &text[i + 2..];
@@ -534,7 +589,7 @@ fn affected_against_a_git_ref_writes_github_outputs() {
         "Repeat the specific allergen",
     );
     let (output, summary) = (dir.path().join("out"), dir.path().join("summary"));
-    let out = sopc_in(
+    let out = sop_in(
         dir.path(),
         &["affected", "--dir", &root, "--against", "main", "--all-if-none", "--ci"],
         &[("GITHUB_OUTPUT", &output), ("GITHUB_STEP_SUMMARY", &summary)],
@@ -601,8 +656,8 @@ fn lint_with_context(sentence: &str) -> (Output, Output) {
         &format!("Pickup only after 10pm. {sentence}"),
     );
     (
-        sopc_in(&repo_root(), &["lint", "--dir", &root, "--json"], &[]),
-        sopc_in(&repo_root(), &["lint", "--dir", &root, "--strict"], &[]),
+        sop_in(&repo_root(), &["lint", "--dir", &root, "--json"], &[]),
+        sop_in(&repo_root(), &["lint", "--dir", &root, "--strict"], &[]),
     )
 }
 
@@ -641,10 +696,10 @@ fn lint_does_not_catch_a_paraphrased_contradiction() {
     assert_eq!(strict.code, 0, "{}", strict.stdout);
 }
 
-/// Runs sopc with `stdin` as its standard input.
+/// Runs sop with `stdin` as its standard input.
 fn run_with_stdin(want: i32, args: &[&str], stdin: &str) -> Output {
     use std::io::Write;
-    let mut child = Command::new(env!("CARGO_BIN_EXE_sopc"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_sop"))
         .args(args)
         .current_dir(repo_root())
         .stdin(std::process::Stdio::piped())
@@ -659,7 +714,7 @@ fn run_with_stdin(want: i32, args: &[&str], stdin: &str) -> Output {
         stdout: String::from_utf8(out.stdout).unwrap(),
         stderr: String::from_utf8(out.stderr).unwrap(),
     };
-    assert_eq!(out.code, want, "sopc {args:?}\nstdout: {}\nstderr: {}", out.stdout, out.stderr);
+    assert_eq!(out.code, want, "sop {args:?}\nstdout: {}\nstderr: {}", out.stdout, out.stderr);
     out
 }
 
@@ -674,10 +729,10 @@ fn originals_json() -> String {
     serde_json::Value::Object(map).to_string()
 }
 
-/// Golden JSON output; set SOPC_UPDATE_GOLDEN=1 to rewrite it.
+/// Golden JSON output; set SOP_UPDATE_GOLDEN=1 to rewrite it.
 fn assert_golden(name: &str, actual: &str) {
     let path = fixture().join("analysis").join(name);
-    if std::env::var_os("SOPC_UPDATE_GOLDEN").is_some() {
+    if std::env::var_os("SOP_UPDATE_GOLDEN").is_some() {
         std::fs::write(&path, actual).unwrap();
     }
     assert_eq!(actual, read(&path), "{name} differs from the golden output");
@@ -755,16 +810,16 @@ fn overlap_and_lint_run() {
 #[test]
 fn skills_install_covers_claude_code_codex_and_opencode() {
     let dir = tempfile::tempdir().unwrap();
-    let out = sopc_in(dir.path(), &["skills", "install"], &[]);
+    let out = sop_in(dir.path(), &["skills", "install"], &[]);
     assert_eq!(out.code, 0);
-    let skill = read(&repo_root().join("skills/sopc-import/SKILL.md"));
+    let skill = read(&repo_root().join("skills/sop-import/SKILL.md"));
     for folder in [".claude/skills", ".agents/skills"] {
-        assert_eq!(read(&dir.path().join(folder).join("sopc-import/SKILL.md")), skill);
+        assert_eq!(read(&dir.path().join(folder).join("sop-import/SKILL.md")), skill);
     }
-    for cmd in ["sopc overlap", "sopc compare", "sopc lint", "sopc guide"] {
+    for cmd in ["sop overlap", "sop compare", "sop lint", "sop guide"] {
         assert!(skill.contains(cmd), "skill doesn't mention {cmd}");
     }
-    for s in ["/sopc-import", "$sopc-import", "OpenCode"] {
+    for s in ["/sop-import", "$sop-import", "OpenCode"] {
         assert!(out.stdout.contains(s), "output lacks {s}");
     }
 }
@@ -772,11 +827,11 @@ fn skills_install_covers_claude_code_codex_and_opencode() {
 #[test]
 fn skills_install_for_one_agent_or_folder() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(sopc_in(dir.path(), &["skills", "install", "--agent", "codex"], &[]).code, 0);
-    assert!(dir.path().join(".agents/skills/sopc-import/SKILL.md").exists());
+    assert_eq!(sop_in(dir.path(), &["skills", "install", "--agent", "codex"], &[]).code, 0);
+    assert!(dir.path().join(".agents/skills/sop-import/SKILL.md").exists());
     assert!(!dir.path().join(".claude").exists());
-    let out = sopc_in(dir.path(), &["skills", "install", "--into", "custom"], &[]);
-    assert_eq!(out.stdout, "installed custom/sopc-import/SKILL.md\n\n");
+    let out = sop_in(dir.path(), &["skills", "install", "--into", "custom"], &[]);
+    assert_eq!(out.stdout, "installed custom/sop-import/SKILL.md\n\n");
 }
 
 #[test]
@@ -796,13 +851,13 @@ fn argument_errors_exit_2() {
     }
     let out = run(0, &["--help"]);
     assert!(
-        out.stdout.contains("Usage: sopc [--dir DIR] [-o DIR] [--check]\n       sopc [--dir DIR] <COMMAND>"),
+        out.stdout.contains("Usage: sop [--dir DIR] [-o DIR] [--check]\n       sop [--dir DIR] <COMMAND>"),
         "{}",
         out.stdout
     );
-    assert!(out.stdout.contains("Run `sopc` to compile"), "{}", out.stdout);
+    assert!(out.stdout.contains("Run `sop` to compile"), "{}", out.stdout);
     let out = run(0, &["plan", "-h"]);
-    assert!(out.stdout.contains("Usage: sopc plan [OPTIONS]"), "{}", out.stdout);
+    assert!(out.stdout.contains("Usage: sop plan [OPTIONS]"), "{}", out.stdout);
     assert!(out.stdout.contains("-C, --dir <DIR>"), "{}", out.stdout);
 }
 
@@ -855,25 +910,25 @@ fn export_prints_every_block_as_json() {
     edit(&Path::new(&root).join("agents/tonys-pizza.yaml"), "  - pizza-context\n", "  - nope\n");
     run(0, &["export", "--dir", &root]);
     // Groups, in order.
-    edit(&Path::new(&root).join("sopc.yaml"), "version: 1\n", "version: 1\ngroups:\n  b: [closing]\n  a: [b]\n");
+    edit(&Path::new(&root).join("sop.yaml"), "version: 1\n", "version: 1\ngroups:\n  b: [closing]\n  a: [b]\n");
     let out: serde_json::Value = serde_json::from_str(&run(0, &["export", "--dir", &root]).stdout).unwrap();
     assert_eq!(out["config"]["groups"].to_string(), r#"{"b":["closing"],"a":["b"]}"#);
 }
 
 #[test]
 fn help_has_examples_and_docs_links() {
-    let docs = "https://github.com/amanmibra/sopc/blob/main/CLI.md";
+    let docs = "https://github.com/sopops-dev/sop/blob/main/CLI.md";
     let out = run(0, &["--help"]);
-    assert!(out.stdout.contains("Examples:\n  sopc "), "{}", out.stdout);
-    assert!(out.stdout.ends_with(&format!("Docs: {docs}\nIssues: https://github.com/amanmibra/sopc/issues\n")));
+    assert!(out.stdout.contains("Examples:\n  sop "), "{}", out.stdout);
+    assert!(out.stdout.ends_with(&format!("Docs: {docs}\nIssues: https://github.com/sopops-dev/sop/issues\n")));
     assert!(!run(0, &["-h"]).stdout.contains("Examples:"));
     for cmd in [
         "validate", "lint", "fmt", "plan", "affected", "agents", "export", "convert", "overlap", "compare", "verify",
         "migrate", "skills", "guide",
     ] {
-        let link = format!("Docs: {docs}#sopc-{cmd}\n");
+        let link = format!("Docs: {docs}#sop-{cmd}\n");
         let long = run(0, &[cmd, "--help"]).stdout;
-        assert!(long.contains(&format!("Examples:\n  sopc {cmd}")) && long.ends_with(&link), "{cmd}: {long}");
+        assert!(long.contains(&format!("Examples:\n  sop {cmd}")) && long.ends_with(&link), "{cmd}: {long}");
         let short = run(0, &[cmd, "-h"]).stdout;
         assert!(!short.contains("Examples:") && short.ends_with(&link), "{cmd}: {short}");
     }
@@ -881,9 +936,9 @@ fn help_has_examples_and_docs_links() {
 
 #[test]
 fn a_closed_pipe_is_a_quiet_exit() {
-    // Like `sopc guide | head -1`: the reader is gone before sopc writes.
+    // Like `sop guide | head -1`: the reader is gone before sop writes.
     for args in [&["guide"][..], &["agents", "--dir", "tests/fixtures/restaurants/sops"]] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_sopc"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_sop"))
             .args(args)
             .current_dir(repo_root())
             .stdout(std::process::Stdio::piped())
@@ -949,30 +1004,30 @@ fn tree(root: &Path) -> std::collections::BTreeMap<String, String> {
 #[test]
 fn old_format_says_to_run_migrate() {
     let (dir, _) = old_repo("restaurants");
-    let out = sopc_in(dir.path(), &["validate"], &[]);
+    let out = sop_in(dir.path(), &["validate"], &[]);
     assert_eq!(out.code, 1);
-    assert!(out.stderr.contains("sops/bases: error [old_format] the bases/ folder (now instructions/) is from the old format; run `sopc migrate` to convert this folder"), "{}", out.stderr);
+    assert!(out.stderr.contains("sops/bases: error [old_format] the bases/ folder (now instructions/) is from the old format; run `sop migrate` to convert this folder"), "{}", out.stderr);
     assert!(
         out.stderr.contains("sops/agents/tonys-pizza.yaml: error [old_format] `inherits` is from the old format"),
         "{}",
         out.stderr
     );
     assert!(!out.stderr.contains("[invalid_field]"), "only old_format errors: {}", out.stderr);
-    assert_eq!(sopc_in(dir.path(), &[], &[]).code, 1);
+    assert_eq!(sop_in(dir.path(), &[], &[]).code, 1);
 }
 
 #[test]
 fn migrate_shows_the_plan_then_writes_with_yes() {
     let (dir, root) = old_repo("livekit-restaurant");
     let before = tree(Path::new(&root));
-    let out = sopc_in(dir.path(), &["migrate"], &[]);
+    let out = sop_in(dir.path(), &["migrate"], &[]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     for line in [
         "Migrating sops to the current format (13 file(s) change):\n",
         "  sops/bases/closing.md → sops/instructions/closing.md: removed agents, position\n",
         "  sops/agents/tonys-pizza.yaml: instructions → context; removed inherits; blocks: restaurant-host, pizza-context, brand-voice, allergen-check, delivery-handling, closing\n",
-        "  sops/sopc.yaml: removed sop_order\n",
-        "Comments that go with removed fields:\n  sops/sopc.yaml\n    line 14: # SOPs listed here come first, in this order. Unlisted SOPs follow alphabetically.\n",
+        "  sops/sop.yaml: removed sop_order\n",
+        "Comments that go with removed fields:\n  sops/sop.yaml\n    line 14: # SOPs listed here come first, in this order. Unlisted SOPs follow alphabetically.\n",
         "Checked: all 4 agent prompt(s) stay the same, except each agent's own text (now `context`) moves to the top.\n",
         "Nothing written. Rerun with --yes to write these changes.\n",
     ] {
@@ -981,7 +1036,7 @@ fn migrate_shows_the_plan_then_writes_with_yes() {
     assert!(!out.stdout.contains("warning"), "locks are dropped without warnings:\n{}", out.stdout);
     assert_eq!(tree(Path::new(&root)), before, "a dry run writes nothing");
 
-    let out = sopc_in(dir.path(), &["migrate", "--yes"], &[]);
+    let out = sop_in(dir.path(), &["migrate", "--yes"], &[]);
     assert_eq!(out.code, 0, "{}", out.stderr);
     assert!(out.stdout.contains("Wrote 13 file(s). Verified on disk: 4 agent prompt(s) match.\n"), "{}", out.stdout);
     assert!(!Path::new(&root).join("bases").exists());
@@ -1022,11 +1077,11 @@ fn locked_says_to_run_migrate_which_removes_it() {
     git(dir.path(), &["init", "-q", "-b", "main"]);
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"]);
-    let out = sopc_in(dir.path(), &["validate"], &[]);
+    let out = sop_in(dir.path(), &["validate"], &[]);
     assert_eq!(out.code, 1);
     assert_eq!(
         out.stderr,
-        "sops/instructions/brand-voice.md: error [removed_field] `locked` is no longer part of the format; run `sopc migrate` to remove it from this folder (or delete the line)\n"
+        "sops/instructions/brand-voice.md: error [removed_field] `locked` is no longer part of the format; run `sop migrate` to remove it from this folder (or delete the line)\n"
     );
     let before = tree(Path::new(&root));
     let out = run_ok(dir.path(), &["migrate"]);

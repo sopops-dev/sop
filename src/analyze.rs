@@ -14,9 +14,9 @@ use std::sync::LazyLock;
 static LIST_MARKER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:[-*+]|\d+[.)])\s+").unwrap());
 static HEADING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*#{1,6}\s+").unwrap());
 static LABEL_ONLY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[A-Za-z][A-Za-z ]{0,30}:$").unwrap());
-static SOPC_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:Goal|When this applies):\s+").unwrap());
+static SOP_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:Goal|When this applies):\s+").unwrap());
 static WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9]+(?:'[a-z]+)?").unwrap());
-/// Lines sopc itself adds to SOPs, which originals never contain.
+/// Lines sop itself adds to SOPs, which originals never contain.
 static GENERATED: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(?:Use the `[^`]+` tool\.|This applies to the `[^`]+` tool\.|Before following this procedure, call the `get_sop` tool.*)$").unwrap()
 });
@@ -78,7 +78,7 @@ fn unit_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
         }
         let mut at = offset + (raw.len() - raw.trim_start().len());
         let mut line = line;
-        for prefix in [&*LIST_MARKER, &*SOPC_PREFIX] {
+        for prefix in [&*LIST_MARKER, &*SOP_PREFIX] {
             let skip = prefix.find(line).map_or(0, |m| m.end());
             (line, at) = (&line[skip..], at + skip);
         }

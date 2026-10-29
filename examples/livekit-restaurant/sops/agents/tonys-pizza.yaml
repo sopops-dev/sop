@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../../../spec/agent.schema.json
 #
-# One file per voice agent. The file name (tonys-pizza) is its id in sopc.
+# One file per voice agent. The file name (tonys-pizza) is its id in sop.
 
 livekit: tonys-pizza            # the LiveKit agent_name; exactly one of livekit | vapi | elevenlabs | retell
 

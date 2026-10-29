@@ -1,4 +1,4 @@
-//! Tests of `sopc verify` against a mock of the platforms' APIs.
+//! Tests of `sop verify` against a mock of the platforms' APIs.
 
 use serde_json::{json, Value as Json};
 use std::collections::BTreeMap;
@@ -58,9 +58,16 @@ struct Output {
     stderr: String,
 }
 
-/// Runs `sopc verify` in `root` with every key set except `unset`, against `url` for every platform.
+/// Runs `sop verify` in `root` with every key set except `unset`, against `url` for every platform.
 fn verify(root: &Path, url: &str, args: &[&str], unset: &[&str]) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_sopc"));
+    verify_with_urls(root, args, unset, &URL_VARS.map(|var| (var.to_string(), url.to_string())))
+}
+
+const URL_VARS: [&str; 3] = ["SOP_ELEVENLABS_URL", "SOP_VAPI_URL", "SOP_RETELL_URL"];
+
+/// [`verify`] with these base URL variables set, and the other `SOP_*_URL` and `SOPC_*_URL` unset.
+fn verify_with_urls(root: &Path, args: &[&str], unset: &[&str], urls: &[(String, String)]) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_sop"));
     cmd.arg("verify").args(args).arg("--dir").arg(root);
     for var in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"] {
         cmd.env_remove(var);
@@ -72,7 +79,10 @@ fn verify(root: &Path, url: &str, args: &[&str], unset: &[&str]) -> Output {
             cmd.env(k, v);
         }
     }
-    for var in ["SOPC_ELEVENLABS_URL", "SOPC_VAPI_URL", "SOPC_RETELL_URL"] {
+    for var in URL_VARS {
+        cmd.env_remove(var).env_remove(var.replace("SOP_", "SOPC_"));
+    }
+    for (var, url) in urls {
         cmd.env(var, url);
     }
     let out = cmd.output().unwrap();
@@ -100,7 +110,7 @@ fn copy_dir(src: &Path, dst: &Path) {
     }
 }
 
-/// Agents added to the fixture's three LiveKit ones: (sopc id, platform line).
+/// Agents added to the fixture's three LiveKit ones: (agent id, platform line).
 const AGENTS: [(&str, &str); 11] = [
     ("el-sync", "elevenlabs: el_sync"),
     ("el-flow", "elevenlabs: el_flow"),
@@ -147,7 +157,7 @@ fn workspace() -> (tempfile::TempDir, PathBuf, BTreeMap<String, String>) {
         std::fs::write(root.join(format!("agents/{id}.yaml")), text).unwrap();
     }
     let out = dir.path().join("out");
-    let status = Command::new(env!("CARGO_BIN_EXE_sopc")).arg("--dir").arg(&root).arg("-o").arg(&out).output();
+    let status = Command::new(env!("CARGO_BIN_EXE_sop")).arg("--dir").arg(&root).arg("-o").arg(&out).output();
     assert!(status.unwrap().status.success());
     let prompts = AGENTS
         .iter()
@@ -367,6 +377,28 @@ fn verify_in_sync_exits_0() {
 }
 
 #[test]
+fn verify_reads_the_old_sopc_url_variables() {
+    let (_dir, root, prompts) = workspace();
+    let (url, _) = mock(routes(&prompts));
+    let agents = ["el-sync", "agent_sync", "el-flow", "tonys-pizza"];
+    let old: Vec<(String, String)> = URL_VARS.iter().map(|var| (var.replace("SOP_", "SOPC_"), url.clone())).collect();
+    let out = verify_with_urls(&root, &agents, &[], &old);
+    assert_eq!(out.code, 0, "{}\n{}", out.stdout, out.stderr);
+    assert!(out.stdout.ends_with("\n2 in sync, 1 not comparable, 1 skipped\n"), "{}", out.stdout);
+
+    // The new names win when both are set.
+    let unreachable = {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        format!("http://{}", l.local_addr().unwrap())
+    };
+    let mut both = old.clone();
+    both.extend(URL_VARS.map(|var| (var.to_string(), unreachable.clone())));
+    let out = verify_with_urls(&root, &agents, &[], &both);
+    assert_eq!(out.code, 1, "{}", out.stdout);
+    assert!(line(&out, "el-sync").contains("error: can't reach"), "{}", out.stdout);
+}
+
+#[test]
 fn verify_filters_by_id_and_rejects_unknown_ones() {
     let (_dir, root, prompts) = workspace();
     let (url, seen) = mock(routes(&prompts));
@@ -522,7 +554,7 @@ fn verify_doesnt_fail_on_tools_an_mcp_server_may_provide() {
     let out = verify(&root, &url, &["vapi-mcp"], &[]);
     assert_eq!(out.code, 0, "{}", out.stdout);
     assert!(out.stdout.contains("  tools: not confirmed: check_capacity, "), "{}", out.stdout);
-    assert!(out.stdout.contains("(the agent uses MCP servers, whose tools sopc can't list)\n"), "{}", out.stdout);
+    assert!(out.stdout.contains("(the agent uses MCP servers, whose tools sop can't list)\n"), "{}", out.stdout);
     assert!(out.stdout.contains("  tools: not in any SOP: transferCall\n"), "{}", out.stdout);
 }
 

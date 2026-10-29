@@ -8,6 +8,6 @@
       "type": "string"
     }
   },
-  "title": "sopc instruction: front matter of instructions/<id>.md",
+  "title": "sop instruction: front matter of instructions/<id>.md",
   "type": "object"
 }

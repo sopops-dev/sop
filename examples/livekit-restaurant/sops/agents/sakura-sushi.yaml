@@ -13,4 +13,4 @@ blocks:
 variables:
   restaurant_name: Sakura Sushi
   menu_allergen_link: sakurasushi.nyc/allergens
-  staff_transfer: the head chef # overrides the default in sopc.yaml
+  staff_transfer: the head chef # overrides the default in sop.yaml

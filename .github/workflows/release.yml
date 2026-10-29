@@ -1,9 +1,9 @@
 name: release
 
-# Builds sopc for macOS, Linux and Windows (amd64 and arm64) and attaches the archives to a
+# Builds sop for macOS, Linux and Windows (amd64 and arm64) and attaches the archives to a
 # draft GitHub Release. Triggered by pushing a tag like v0.0.5 (it must match Cargo.toml).
 #
-# Asset names carry no version (sopc_<os>_<arch>.tar.gz, .zip on Windows) so install.sh can
+# Asset names carry no version (sop_<os>_<arch>.tar.gz, .zip on Windows) so install.sh can
 # use GitHub's releases/latest/download/<name> URL; checksums.txt lists "<sha256>  <name>".
 on:
   push:
@@ -51,19 +51,19 @@ jobs:
       - name: Archive
         shell: bash
         run: |
-          name="sopc_${{ matrix.os }}_${{ matrix.arch }}"
+          name="sop_${{ matrix.os }}_${{ matrix.arch }}"
           mkdir -p staging dist
           cp LICENSE README.md FORMAT.md staging/
           if [ "${{ matrix.os }}" = windows ]; then
-            cp "target/${{ matrix.target }}/release/sopc.exe" staging/
-            (cd staging && 7z a -tzip "../dist/$name.zip" sopc.exe LICENSE README.md FORMAT.md >/dev/null)
+            cp "target/${{ matrix.target }}/release/sop.exe" staging/
+            (cd staging && 7z a -tzip "../dist/$name.zip" sop.exe LICENSE README.md FORMAT.md >/dev/null)
           else
-            cp "target/${{ matrix.target }}/release/sopc" staging/
-            tar -czf "dist/$name.tar.gz" -C staging sopc LICENSE README.md FORMAT.md
+            cp "target/${{ matrix.target }}/release/sop" staging/
+            tar -czf "dist/$name.tar.gz" -C staging sop LICENSE README.md FORMAT.md
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: sopc_${{ matrix.os }}_${{ matrix.arch }}
+          name: sop_${{ matrix.os }}_${{ matrix.arch }}
           path: dist/*
 
   release:
@@ -76,7 +76,7 @@ jobs:
           merge-multiple: true
       - name: Checksums
         working-directory: dist
-        run: sha256sum sopc_* > checksums.txt && cat checksums.txt
+        run: sha256sum sop_* > checksums.txt && cat checksums.txt
       - name: Draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

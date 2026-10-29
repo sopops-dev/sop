@@ -551,7 +551,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sopc"
+name = "sop-cli"
 version = "0.0.18"
 dependencies = [
  "anyhow",

@@ -1,6 +1,6 @@
 # Contributors
 
-People who have shaped sopc through code, design, or real-world use. Add yourself in your first pull request.
+People who have shaped sop through code, design, or real-world use. Add yourself in your first pull request.
 
 | Name | GitHub | Contributions |
 |---|---|---|

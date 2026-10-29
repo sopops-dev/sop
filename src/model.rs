@@ -1,4 +1,4 @@
-//! The sopc file formats (instructions, SOPs, agents, sopc.yaml), parsed from YAML, and their
+//! The sop file formats (instructions, SOPs, agents, sop.yaml), parsed from YAML, and their
 //! canonical JSON, which lock.json block hashes are taken over.
 //!
 //! The field lists below fix both what a file may contain and the order of keys in the
@@ -31,14 +31,14 @@ pub const STEP_FIELDS: &[&str] = &["text", "tool", "required", "or"];
 pub const SOP_REQUIRED: &[&str] = &["name", "procedureSteps"];
 pub const STEP_REQUIRED: &[&str] = &["text"];
 
-/// Fields of the format before `sopc migrate` (v0.0.8 and earlier), by file kind. Finding one
+/// Fields of the format before `sop migrate` (v0.0.8 and earlier), by file kind. Finding one
 /// means the folder needs migrating.
 pub const OLD_INSTRUCTION_FIELDS: &[&str] = &["agents", "exclude", "inherits", "position"];
 pub const OLD_SOP_FIELDS: &[&str] = &["agents", "exclude"];
 pub const OLD_AGENT_FIELDS: &[&str] = &["inherits", "exclude", "instructions"];
 pub const OLD_CONFIG_FIELDS: &[&str] = &["sop_order"];
 /// Fields of instructions and SOPs that sopc v0.0.9 and earlier read and the format no longer
-/// has. `sopc migrate` removes them; nothing else reads them.
+/// has. `sop migrate` removes them; nothing else reads them.
 pub const REMOVED_FIELDS: &[&str] = &["locked"];
 
 /// A step, forbidden action or warning sign.
@@ -606,7 +606,7 @@ pub fn parse_agent(map: &Mapping) -> Result<Agent, Vec<String>> {
     finish(agent, e)
 }
 
-/// sopc.yaml.
+/// sop.yaml.
 pub fn parse_config(map: &Mapping) -> Result<Config, Vec<String>> {
     let mut e = Errors::default();
     let f = Fields::new(map, "", CONFIG_FIELDS, &[], &mut e);

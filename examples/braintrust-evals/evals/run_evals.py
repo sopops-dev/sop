@@ -1,10 +1,10 @@
-"""Run Braintrust evals for the agents a sopc change touches, and fail on regressions.
+"""Run Braintrust evals for the agents a sop change touches, and fail on regressions.
 
     python evals/run_evals.py --base origin/main   # --sops and --cases default to sops/ and evals/cases.yaml
 
-1. Builds every agent's prompt twice with the sopc CLI: at --base (e.g. the PR's target
+1. Builds every agent's prompt twice with the sop CLI: at --base (e.g. the PR's target
    branch, checked out in a temporary git worktree) and as it is now.
-2. Asks `sopc affected` which agents' prompts changed.
+2. Asks `sop affected` which agents' prompts changed.
 3. Picks the cases that apply to those agents (by SOP or by agent, see cases.yaml).
 4. Runs the cases against both prompts as two Braintrust experiments, so the Braintrust
    UI shows them side by side.
@@ -33,10 +33,16 @@ from autoevals import LLMClassifier
 from braintrust import Eval
 from openai import AsyncOpenAI, OpenAI
 
-MODEL = os.environ.get("SOPC_EVAL_MODEL", "gpt-4.1-mini")
-JUDGE_MODEL = os.environ.get("SOPC_JUDGE_MODEL", MODEL)
+
+def env(name, default):
+    """SOP_<name>, else the SOPC_<name> it was called before the CLI was renamed to sop."""
+    return os.environ.get(f"SOP_{name}") or os.environ.get(f"SOPC_{name}") or default
+
+
+MODEL = env("EVAL_MODEL", "gpt-4.1-mini")
+JUDGE_MODEL = env("JUDGE_MODEL", MODEL)
 PROXY_URL = "https://api.braintrust.dev/v1/proxy"
-TRIALS = int(os.environ.get("SOPC_EVAL_TRIALS", "3"))  # model replies vary; average a few runs
+TRIALS = int(env("EVAL_TRIALS", "3"))  # model replies vary; average a few runs
 REGRESSION_MARGIN = 0.25  # a case regresses if its average score drops by more than this
 
 
@@ -56,7 +62,7 @@ class Case:
 
 @dataclass
 class Built:
-    """One agent's built prompt, from `sopc --dir <root> --out <dir>` and `sopc agents --json`."""
+    """One agent's built prompt, from `sop --dir <root> --out <dir>` and `sop agents --json`."""
 
     prompt: str
     tools: list[str]
@@ -64,18 +70,18 @@ class Built:
     hash: str
 
 
-def sopc(*args: str) -> str:
-    """Run the sopc CLI (on PATH) and return its stdout; its errors go to the log."""
-    result = subprocess.run(["sopc", *args], capture_output=True, text=True)
+def sop(*args: str) -> str:
+    """Run the sop CLI (on PATH) and return its stdout; its errors go to the log."""
+    result = subprocess.run(["sop", *args], capture_output=True, text=True)
     if result.returncode != 0:
-        sys.exit(f"sopc {' '.join(args)} failed:\n{result.stderr}")
+        sys.exit(f"sop {' '.join(args)} failed:\n{result.stderr}")
     return result.stdout
 
 
 def build(root: Path, out: Path) -> dict[str, Built]:
-    """Compile every agent's prompt in a sopc root into `out`."""
-    sopc("--dir", str(root), "--out", str(out))
-    agents = json.loads(sopc("agents", "--dir", str(root), "--json"))
+    """Compile every agent's prompt in a sop root into `out`."""
+    sop("--dir", str(root), "--out", str(out))
+    agents = json.loads(sop("agents", "--dir", str(root), "--json"))
     return {
         a["id"]: Built((out / f"{a['id']}.prompt.md").read_text(), a["tools"], a["sops"], a["hash"])
         for a in agents
@@ -83,7 +89,7 @@ def build(root: Path, out: Path) -> dict[str, Built]:
 
 
 def build_at(ref: str, root: Path, tmp: Path) -> dict[str, Built] | None:
-    """Build the prompts as they were at a git ref, in a temporary worktree. None if the ref has no sopc root."""
+    """Build the prompts as they were at a git ref, in a temporary worktree. None if the ref has no sop root."""
     def git(*args: str, cwd: Path = root) -> str:
         return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
@@ -92,11 +98,11 @@ def build_at(ref: str, root: Path, tmp: Path) -> dict[str, Built] | None:
     git("worktree", "add", "--detach", str(worktree), ref)
     try:
         base_root = worktree / root.resolve().relative_to(top.resolve())
-        if not (base_root / "sopc.yaml").exists():
+        if not (base_root / "sop.yaml").exists():
             return None
-        # A base from before `sopc migrate` is built as migrating it would (this worktree is a
-        # throwaway copy). Already-migrated folders, and sopc releases without migrate, skip this.
-        subprocess.run(["sopc", "migrate", "--dir", str(base_root), "--yes"], capture_output=True)
+        # A base from before `sop migrate` is built as migrating it would (this worktree is a
+        # throwaway copy). Already-migrated folders, and sop releases without migrate, skip this.
+        subprocess.run(["sop", "migrate", "--dir", str(base_root), "--yes"], capture_output=True)
         return build(base_root, tmp / "base-build")
     finally:
         git("worktree", "remove", "--force", str(worktree))
@@ -207,20 +213,20 @@ def mean_scores(result) -> tuple[dict[tuple[str, str], float], set[tuple[str, st
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sops", default="sops", help="the sopc root")
+    ap.add_argument("--sops", default="sops", help="the sop root")
     ap.add_argument("--cases", default="evals/cases.yaml")
     ap.add_argument("--base", default="origin/main", help="git ref to compare against")
-    ap.add_argument("--project", default="sopc-evals", help="Braintrust project name")
+    ap.add_argument("--project", default="sop-evals", help="Braintrust project name")
     ap.add_argument("--summary", help="write a Markdown summary here (for the PR comment)")
     ap.add_argument("--dry-run", action="store_true", help="show what would run, call no models")
     args = ap.parse_args()
 
-    tmp = Path(tempfile.mkdtemp(prefix="sopc-evals-"))
+    tmp = Path(tempfile.mkdtemp(prefix="sop-evals-"))
     root = Path(args.sops)
     head = build(root, tmp / "head-build")
     base = build_at(args.base, root, tmp)
-    plan_text = sopc("plan", "--dir", str(root), "--against", args.base, "--summary")
-    affected = json.loads(sopc("affected", "--dir", str(root), "--against", args.base, "--format", "json"))
+    plan_text = sop("plan", "--dir", str(root), "--against", args.base, "--summary")
+    affected = json.loads(sop("affected", "--dir", str(root), "--against", args.base, "--format", "json"))
 
     cases = [Case(**c) for c in yaml.safe_load(Path(args.cases).read_text())]
     changed = [a["id"] for a in affected["agents"]]  # prompt changed or new; removed agents aren't listed
@@ -233,7 +239,7 @@ def main() -> int:
     # Cases for brand-new agents have no "before" to compare with; they run on the new prompt only.
     comparable = [(a, c) for a, c in work if base and a in base]
 
-    out = ["## sopc evals", "", plan_text.strip(), ""]
+    out = ["## sop evals", "", plan_text.strip(), ""]
     print("\n".join(out))
     if not work:
         out.append("No eval cases apply to the changed agents.")
