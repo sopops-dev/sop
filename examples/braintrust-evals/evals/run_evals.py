@@ -35,8 +35,8 @@ from openai import AsyncOpenAI, OpenAI
 
 
 def env(name, default):
-    """SOP_<name>, else the SOPC_<name> it was called before the CLI was renamed to sop."""
-    return os.environ.get(f"SOP_{name}") or os.environ.get(f"SOPC_{name}") or default
+    """SOP_<name>, else the default."""
+    return os.environ.get(f"SOP_{name}") or default
 
 
 MODEL = env("EVAL_MODEL", "gpt-4.1-mini")

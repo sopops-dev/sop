@@ -292,6 +292,7 @@ Set exactly one platform field. Write `context` right after it, then `blocks`, s
 | Code | Severity | Meaning |
 |---|---|---|
 | `missing_config` | error | No `sop.yaml` in the folder. |
+| `old_config_name` | error | The folder has `sopc.yaml`, the config's name before v0.1.0, and no `sop.yaml`. Rename it (`git mv sops/sopc.yaml sops/sop.yaml`) or run `sop migrate`. |
 | `invalid_yaml` | error | A file isn't valid YAML (including a key written twice), or isn't a mapping. |
 | `colon_in_step` | error | A step contains `: ` and YAML read it as a key and value. Put the whole step in quotes. |
 | `unquoted_value` | error | A step YAML read as a number or boolean (`- 10`, `- true`). Put it in quotes. |

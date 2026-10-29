@@ -455,6 +455,17 @@ fn legacy_config_name_says_to_rename_it() {
     assert!(issues[0].message.contains("rename opensop.yaml to sop.yaml"), "{}", issues[0].message);
 }
 
+#[test]
+fn old_config_name_says_to_rename_it() {
+    let r = Repo::new();
+    std::fs::rename(r.root().join("sop.yaml"), r.root().join("sopc.yaml")).unwrap();
+    let issues = load_issues(r.root());
+    assert_eq!(codes(&issues), ["old_config_name"]);
+    assert_eq!(issues[0].path, "sopc.yaml");
+    assert!(issues[0].message.contains("rename it to sop.yaml"), "{}", issues[0].message);
+    assert!(issues[0].message.contains("`sop migrate`"), "{}", issues[0].message);
+}
+
 // --- rendering -------------------------------------------------------------------------------------
 
 fn file_names(dir: &Path) -> Vec<String> {

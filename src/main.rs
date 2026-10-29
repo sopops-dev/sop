@@ -35,7 +35,7 @@ use std::process::ExitCode;
 use text::{pretty_json, tidy, user_path};
 use workspace::{
     is_source, load, load_files, read_files, read_text, stem, write_atomic, Issue, Issues, CONFIG, LEGACY_CONFIG,
-    SOPC_CONFIG,
+    OLD_CONFIG_NAME,
 };
 
 /// The format reference, printed by `sop guide`.
@@ -278,7 +278,7 @@ Keys are read from ELEVENLABS_API_KEY, VAPI_API_KEY and RETELL_API_KEY. Only GET
         #[arg(long)]
         json: bool,
     },
-    /// Convert a folder from the format of sopc v0.0.8 and earlier (bases/, targeting) to the current one
+    /// Convert a folder from the format of sopc v0.0.8 and earlier (bases/, targeting) to the current one, and rename sopc.yaml to sop.yaml
     #[command(
         after_help = docs!("migrate"),
         after_long_help = examples!("migrate", "  sop migrate        Show what would change, and check every prompt stays the same
@@ -316,9 +316,8 @@ Keys are read from ELEVENLABS_API_KEY, VAPI_API_KEY and RETELL_API_KEY. Only GET
 }
 
 /// The folder a command works on: `dir` if given, else `cwd/sops` if it holds sop.yaml, else
-/// `cwd` if it does. sopc.yaml (its name before the CLI was renamed to sop) counts as sop.yaml. A
-/// folder with only the legacy opensop.yaml is chosen the same way, so loading it explains the
-/// rename.
+/// `cwd` if it does. A folder with only an old config name (sopc.yaml, or the legacy opensop.yaml)
+/// is chosen the same way, so loading it explains the rename.
 fn resolve_root(dir: Option<PathBuf>, cwd: &Path) -> anyhow::Result<PathBuf> {
     if let Some(dir) = dir {
         if !cwd.join(&dir).is_dir() {
@@ -329,7 +328,7 @@ fn resolve_root(dir: Option<PathBuf>, cwd: &Path) -> anyhow::Result<PathBuf> {
     }
     let sops = PathBuf::from("sops");
     let here = PathBuf::from(".");
-    for configs in [&[CONFIG, SOPC_CONFIG][..], &[LEGACY_CONFIG]] {
+    for configs in [&[CONFIG][..], &[OLD_CONFIG_NAME, LEGACY_CONFIG]] {
         for dir in [&sops, &here] {
             if configs.iter().any(|config| cwd.join(dir).join(config).is_file()) {
                 return Ok(dir.clone());
@@ -631,7 +630,7 @@ fn run(command: Command, dir: Option<PathBuf>) -> anyhow::Result<ExitCode> {
 /// The SOP files of a folder: (relative path, text).
 fn sop_files(root: &Path) -> anyhow::Result<Vec<(String, String)>> {
     let files = read_files(root)?;
-    if workspace::config_file(&files).is_none() {
+    if !files.contains_key(CONFIG) {
         return Err(workspace::missing_config(&files).into());
     }
     Ok(files.into_iter().filter(|(p, _)| p.starts_with("procedures/")).collect())
@@ -753,23 +752,49 @@ fn convert(root: &Path, to: Kind, ids: &[String], yes: bool) -> anyhow::Result<E
 }
 
 /// `sop migrate`: prints the plan (checked in memory); with `yes`, writes it and checks the
-/// files on disk build the same prompts.
+/// files on disk build the same prompts. A folder whose config still has its name from before
+/// v0.1.0 (sopc.yaml) has it renamed to sop.yaml as part of the plan.
 fn migrate(root: &Path, yes: bool) -> anyhow::Result<ExitCode> {
-    let files = read_files(root)?;
-    if workspace::config_file(&files).is_none() {
+    let mut files = read_files(root)?;
+    let rename = !files.contains_key(CONFIG) && files.contains_key(OLD_CONFIG_NAME);
+    if rename {
+        let text = files.remove(OLD_CONFIG_NAME).unwrap_or_default();
+        files.insert(CONFIG.to_string(), text);
+    }
+    if !files.contains_key(CONFIG) {
         return Err(workspace::missing_config(&files).into());
     }
-    if !migrate::needs_migrating(&files) {
+    let needs = migrate::needs_migrating(&files);
+    if !rename && !needs {
         println!("{} is already in the current format; nothing to migrate", root.display());
         return Ok(ExitCode::SUCCESS);
     }
-    let m = migrate::migrate(&files)?;
-    migrate::verify(&m.files, &m.expected)?;
-    print!("{}", migrate::plan_text(&m, &root.display().to_string(), &|p| user_path(root, p)));
+    let m = if needs {
+        let m = migrate::migrate(&files)?;
+        migrate::verify(&m.files, &m.expected)?;
+        Some(m)
+    } else {
+        None
+    };
+    if rename {
+        let (old, new) = (user_path(root, OLD_CONFIG_NAME), user_path(root, CONFIG));
+        println!("Renaming {old} → {new} (its name from before v0.1.0)");
+    }
+    if let Some(m) = &m {
+        print!("{}", migrate::plan_text(m, &root.display().to_string(), &|p| user_path(root, p)));
+    }
     if !yes {
         println!("Nothing written. Rerun with --yes to write these changes.");
         return Ok(ExitCode::SUCCESS);
     }
+    if rename {
+        std::fs::rename(root.join(OLD_CONFIG_NAME), root.join(CONFIG))
+            .with_context(|| format!("can't rename {} to {CONFIG}", user_path(root, OLD_CONFIG_NAME)))?;
+    }
+    let Some(m) = m else {
+        println!("Renamed {} to {}.", user_path(root, OLD_CONFIG_NAME), user_path(root, CONFIG));
+        return Ok(ExitCode::SUCCESS);
+    };
     for (path, text) in &m.writes {
         let target = root.join(path);
         if let Some(parent) = target.parent() {
@@ -971,9 +996,10 @@ fn files_at_ref(root: &Path, git_ref: &str) -> anyhow::Result<BTreeMap<String, S
     let objects: Vec<&str> = wanted.iter().map(|(_, o)| o.as_str()).collect();
     let texts = read_blobs(&top, &objects)?;
     let mut files: BTreeMap<String, String> = wanted.into_iter().map(|(rel, _)| rel).zip(texts).collect();
-    // A ref from before the OpenSOP rename: read its opensop.yaml as the config.
-    if workspace::config_file(&files).is_none() {
-        if let Some(text) = files.remove(LEGACY_CONFIG) {
+    // A ref from before a rename (sopc.yaml before v0.1.0, opensop.yaml before the OpenSOP rename):
+    // read its old config as the config. History isn't the user's to fix.
+    if !files.contains_key(CONFIG) {
+        if let Some(text) = files.remove(OLD_CONFIG_NAME).or_else(|| files.remove(LEGACY_CONFIG)) {
             files.insert(CONFIG.to_string(), text);
         }
     }

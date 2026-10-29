@@ -67,19 +67,9 @@ pub struct Workspace {
     pub agents: Vec<model::Agent>,
     /// Warnings found while reading files (e.g. an empty Markdown section).
     pub warnings: Vec<Issue>,
-    /// The config file it was read from ([`CONFIG`] or [`SOPC_CONFIG`]); empty means [`CONFIG`].
-    pub config_file: &'static str,
 }
 
 impl Workspace {
-    /// The path of the config file, for issues about it.
-    pub fn config_path(&self) -> &'static str {
-        if self.config_file.is_empty() {
-            CONFIG
-        } else {
-            self.config_file
-        }
-    }
     pub fn instruction(&self, id: &str) -> Option<&Instruction> {
         self.instructions.iter().find(|b| b.id == id)
     }
@@ -102,10 +92,9 @@ pub fn agent_path(id: &str) -> String {
 
 /// The file that marks the root of a sop folder.
 pub const CONFIG: &str = "sop.yaml";
-/// Its name before the CLI was renamed from sopc to sop (v0.0.18 and earlier). Still read, silently,
-/// when a folder has no sop.yaml, so existing folders keep building unchanged; sop.yaml wins if
-/// both are there.
-pub const SOPC_CONFIG: &str = "sopc.yaml";
+/// Its name before v0.1.0, when the CLI was named sopc. Read only to say how to migrate (rename
+/// it, or run `sop migrate`), and so `--against` a ref from before the rename still builds.
+pub const OLD_CONFIG_NAME: &str = "sopc.yaml";
 /// Its name before the project was renamed from OpenSOP (v0.0.5 and earlier). Read only to say
 /// how to migrate, and so `--against` a ref from before the rename still builds.
 pub const LEGACY_CONFIG: &str = "opensop.yaml";
@@ -118,7 +107,7 @@ pub const OLD_INSTRUCTIONS: &str = "bases";
 pub fn is_source(rel: &str) -> bool {
     let (folder, name) = rel.rsplit_once('/').unwrap_or(("", rel));
     rel == CONFIG
-        || rel == SOPC_CONFIG
+        || rel == OLD_CONFIG_NAME
         || rel == LEGACY_CONFIG
         || ((folder == "instructions" || folder == OLD_INSTRUCTIONS) && name.ends_with(".md"))
         || (folder == "procedures" && (name.ends_with(".yaml") || name.ends_with(".md")))
@@ -177,13 +166,16 @@ pub fn stem(path: &str) -> &str {
     }
 }
 
-/// The config file of a file map and its text: [`CONFIG`], else [`SOPC_CONFIG`].
-pub fn config_file(files: &BTreeMap<String, String>) -> Option<(&'static str, &String)> {
-    [CONFIG, SOPC_CONFIG].into_iter().find_map(|name| files.get(name).map(|text| (name, text)))
-}
-
-/// The error for a file map without [`CONFIG`]; says to rename [`LEGACY_CONFIG`] if that is there.
+/// The error for a file map without [`CONFIG`]: `old_config_name` if it has [`OLD_CONFIG_NAME`],
+/// else `missing_config` (which says to rename [`LEGACY_CONFIG`] if that is there).
 pub fn missing_config(files: &BTreeMap<String, String>) -> Issues {
+    if files.contains_key(OLD_CONFIG_NAME) {
+        let message = format!(
+            "{OLD_CONFIG_NAME} is the config's name from before v0.1.0; rename it to {CONFIG} \
+             (e.g. `git mv sops/{OLD_CONFIG_NAME} sops/{CONFIG}`), or run `sop migrate` to rename it"
+        );
+        return Issues(vec![Issue::error("old_config_name", OLD_CONFIG_NAME, message)]);
+    }
     let message = if files.contains_key(LEGACY_CONFIG) {
         format!("{CONFIG} not found, but {LEGACY_CONFIG} is: OpenSOP is now sop; rename {LEGACY_CONFIG} to {CONFIG}")
     } else {
@@ -225,16 +217,16 @@ fn old_fields(map: &Mapping, fields: &[&str], path: &str, issues: &mut Vec<Issue
 /// Parses an in-memory file map (relative path → text). A folder in the format before
 /// `sop migrate` fails with `old_format` errors only.
 pub fn load_files(files: &BTreeMap<String, String>) -> Result<Workspace, Issues> {
-    let Some((config_file, config_text)) = config_file(files) else {
+    let Some(config_text) = files.get(CONFIG) else {
         return Err(missing_config(files));
     };
     let mut issues = vec![];
-    let mut ws = Workspace { config_file, ..Workspace::default() };
-    if let Some(map) = load_yaml(config_text, config_file, &mut issues) {
-        old_fields(&map, model::OLD_CONFIG_FIELDS, config_file, &mut issues);
+    let mut ws = Workspace::default();
+    if let Some(map) = load_yaml(config_text, CONFIG, &mut issues) {
+        old_fields(&map, model::OLD_CONFIG_FIELDS, CONFIG, &mut issues);
         match model::parse_config(&map) {
             Ok(config) => ws.config = config,
-            Err(errs) => field_errors(errs, config_file, &mut issues),
+            Err(errs) => field_errors(errs, CONFIG, &mut issues),
         }
     }
     let in_folder = |folder: &'static str| {
@@ -462,7 +454,7 @@ pub fn validate(ws: &Workspace) -> Vec<Issue> {
     }
     for (name, _) in ws.config.groups.iter().filter(|(n, _)| ws.block(n).is_some()) {
         let msg = format!("group '{name}' has the same name as an instruction or SOP; names must be unique");
-        issues.push(Issue::error("duplicate_id", ws.config_path(), msg));
+        issues.push(Issue::error("duplicate_id", CONFIG, msg));
     }
 
     let mut seen_refs: BTreeMap<String, &str> = BTreeMap::new();
@@ -481,7 +473,7 @@ pub fn validate(ws: &Workspace) -> Vec<Issue> {
     for (name, members) in &ws.config.groups {
         for id in members.iter().filter(|id| ws.block(id).is_none() && ws.config.group(id).is_none()) {
             let msg = format!("group '{name}' lists '{id}', which is not an instruction, SOP or group");
-            issues.push(Issue::error("unknown_block", ws.config_path(), msg));
+            issues.push(Issue::error("unknown_block", CONFIG, msg));
         }
     }
     issues.extend(group_cycles(ws));
@@ -504,7 +496,7 @@ pub fn validate(ws: &Workspace) -> Vec<Issue> {
         ));
     }
 
-    if issues.iter().any(|i| !i.warning && i.path == ws.config_path()) {
+    if issues.iter().any(|i| !i.warning && i.path == CONFIG) {
         return issues; // expanding broken groups would be misleading
     }
     let mut used = BTreeSet::new();
@@ -574,7 +566,7 @@ fn group_cycles(ws: &Workspace) -> Vec<Issue> {
             let cycle = &stack[i..];
             if reported.insert(cycle.iter().cloned().collect()) {
                 let message = format!("groups contain each other in a loop: {} → {id}", cycle.join(" → "));
-                out.push(Issue::error("group_cycle", ws.config_path(), message));
+                out.push(Issue::error("group_cycle", CONFIG, message));
             }
             return;
         }

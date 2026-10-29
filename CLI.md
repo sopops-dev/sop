@@ -19,7 +19,7 @@ Installs one `sop` binary into `~/.local/bin` (macOS, Linux and Windows; amd64 a
 | `SOP_REF=TAG` | Install a specific release, e.g. `SOP_REF=v1.0.0` (default: the latest) |
 | `SOP_INSTALL_DIR=DIR` | Install somewhere other than `~/.local/bin` |
 
-The old names `SOPC_REF` and `SOPC_INSTALL_DIR` still work. Releases from before the rename (v0.0.18 and earlier) install a `sopc` binary.
+Releases before v0.1.0 are named sopc and aren't installed by this script; download one from the [releases page](https://github.com/sopops-dev/sop/releases).
 
 From source, with Rust: `cargo install --git https://github.com/sopops-dev/sop`.
 
@@ -27,7 +27,7 @@ To uninstall, delete the binary: `rm ~/.local/bin/sop`. If you installed the imp
 
 ## How every command works
 
-**The folder.** Every command works on the sop folder, the one containing `sop.yaml`: `./sops` if `sops/sop.yaml` exists, otherwise the current folder if `sop.yaml` is there. Use `--dir DIR` (short: `-C DIR`) for another folder. It works before or after the command: `sop --dir path/to/sops validate` and `sop validate --dir path/to/sops` are the same. A folder from before the CLI was renamed from sopc to sop, with `sopc.yaml` instead of `sop.yaml`, still works unchanged (`sop.yaml` wins if both exist).
+**The folder.** Every command works on the sop folder, the one containing `sop.yaml`: `./sops` if `sops/sop.yaml` exists, otherwise the current folder if `sop.yaml` is there. Use `--dir DIR` (short: `-C DIR`) for another folder. It works before or after the command: `sop --dir path/to/sops validate` and `sop validate --dir path/to/sops` are the same. A folder with `sopc.yaml` (the config's name before v0.1.0) and no `sop.yaml` fails with `old_config_name`: rename it (`git mv sops/sopc.yaml sops/sop.yaml`), or run `sop migrate`, which renames it for you.
 
 **Output.** Results go to stdout; errors, warnings and progress notes go to stderr, so `--json` and id lists can be piped safely. File paths in messages are relative to the folder you ran sop from (`sops/procedures/x.md: error [...] line 11: ...`). Color is turned off when output is piped, when `NO_COLOR` is set, or when `TERM=dumb`.
 
@@ -535,6 +535,7 @@ Converts a folder written for an earlier sop to the current format, in place. Ot
 
 - **sopc v0.0.8 and earlier** (`old_format` errors): bases and SOPs chose their agents (`agents`, `exclude`), agents inherited bases (`inherits`) and opted out (`exclude`), and `position` and `sop_order` set the order. Now each agent lists its blocks in order.
 - **sopc v0.0.9** (`removed_field` errors): instructions and SOPs could set `locked: true`, so every agent had to include them. `locked` is gone; `migrate` deletes the line from each file that has it, and nothing else changes.
+- **`sopc.yaml`** (`old_config_name` error): the config's name before v0.1.0. `migrate` renames it to `sop.yaml`, along with any other change the folder needs; its contents stay the same.
 
 ```sh
 sop migrate         # show the plan; write nothing

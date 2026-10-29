@@ -5,7 +5,7 @@
 //! tool list from the same responses where the platform includes it.
 //!
 //! Read-only: only GET requests are sent. Base URLs can be overridden for tests and proxies
-//! (`SOP_ELEVENLABS_URL`, `SOP_VAPI_URL`, `SOP_RETELL_URL`; the old `SOPC_*` names still work).
+//! (`SOP_ELEVENLABS_URL`, `SOP_VAPI_URL`, `SOP_RETELL_URL`).
 
 use crate::plan::labelled_diff;
 use crate::render::Build;
@@ -575,11 +575,9 @@ fn client() -> ureq::Agent {
     config.into()
 }
 
-/// A `SOP_*` variable when set (and not blank), else the `SOPC_*` name it had before the CLI was
-/// renamed from sopc to sop.
-fn env_with_fallback(var: &str) -> Option<String> {
-    let set = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    set(var).or_else(|| var.strip_prefix("SOP_").and_then(|rest| set(&format!("SOPC_{rest}"))))
+/// An environment variable when set and not blank.
+fn env_set(var: &str) -> Option<String> {
+    std::env::var(var).ok().filter(|v| !v.trim().is_empty())
 }
 
 /// GETs `path` from a platform and parses the JSON body. Errors are one plain line; the key is
@@ -589,7 +587,7 @@ fn get(http: &ureq::Agent, api: &Api, path: &str, header: &str, prefix: &str) ->
     if key.trim().is_empty() {
         return Err(format!("{} is not set (needed to read {} agents)", api.key_var, api.name));
     }
-    let base = env_with_fallback(api.url_var);
+    let base = env_set(api.url_var);
     let base = base.as_deref().unwrap_or(api.default_url).trim_end_matches('/').to_string();
     let url = format!("{base}{path}");
     let mut resp = http

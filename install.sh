@@ -4,23 +4,20 @@
 #   curl -fsSL https://raw.githubusercontent.com/sopops-dev/sop/main/install.sh | sh
 #
 # Options (environment variables):
-#   SOP_REF=<tag>               install a specific release, e.g. v0.0.18 (default: the latest release)
+#   SOP_REF=<tag>               install a specific release, e.g. v0.1.0 (default: the latest release)
 #   SOP_INSTALL_DIR=<dir>       where to put the binary (default: ~/.local/bin)
 #
-# The names from before the CLI was renamed from sopc to sop (SOPC_REF, SOPC_INSTALL_DIR,
-# SOPC_RELEASES_URL) still work when the new ones aren't set. Releases from before the rename
-# (v0.0.18 and earlier) ship sopc_<os>_<arch> archives and are installed as `sopc`, as before;
-# later ones ship sop_<os>_<arch> and are installed as `sop`.
+# Installs `sop` from a release's sop_<os>_<arch> archive (v0.1.0 and later).
 #
 # To build from a branch or commit instead, use Rust: cargo install --git https://github.com/sopops-dev/sop --branch <branch> (or --rev <commit>)
 
 set -eu
 
 REPO="sopops-dev/sop"
-REF="${SOP_REF:-${SOPC_REF:-latest}}"
-INSTALL_DIR="${SOP_INSTALL_DIR:-${SOPC_INSTALL_DIR:-$HOME/.local/bin}}"
+REF="${SOP_REF:-latest}"
+INSTALL_DIR="${SOP_INSTALL_DIR:-$HOME/.local/bin}"
 # For testing against local release archives (and checksums.txt): SOP_RELEASES_URL=file:///path/to/dist
-RELEASES_URL="${SOP_RELEASES_URL:-${SOPC_RELEASES_URL:-}}"
+RELEASES_URL="${SOP_RELEASES_URL:-}"
 
 say() { printf 'sop: %s\n' "$1"; }
 fail() { printf 'sop: error: %s\n' "$1" >&2; exit 1; }
@@ -47,19 +44,10 @@ fi
 case "$REF" in
   latest | v[0-9]*) ;;
   [0-9]*) REF="v$REF" ;;
-  *) fail "SOP_REF must be a release tag like v0.0.18 (got '$REF'). To build a branch or commit: cargo install --git https://github.com/$REPO --branch $REF (a commit: --rev $REF)" ;;
+  *) fail "SOP_REF must be a release tag like v0.1.0 (got '$REF'). To build a branch or commit: cargo install --git https://github.com/$REPO --branch $REF (a commit: --rev $REF)" ;;
 esac
-
-# Each kind of release archive: <archive name prefix>:<binary inside it>:<name to install it as>.
-#   sop      releases after the rename from sopc: a `sop` binary
-#   sopc     v0.0.6 to v0.0.18: a `sopc` binary, installed as sopc as before (the sopops
-#            Dockerfile pins one of these and expects sopc)
-#   opensop  before v0.0.6 (when the project was named OpenSOP): an `opensop` binary, installed
-#            as sopc
-# The kinds are tried in order until a release has the archive; known old tags start with sopc.
 case "$REF" in
-  v0.0.[0-9] | v0.0.1[0-8]) KINDS="sopc:sopc:sopc opensop:opensop:sopc sop:sop:sop" ;;
-  *) KINDS="sop:sop:sop sopc:sopc:sopc opensop:opensop:sopc" ;;
+  v0.0.*) fail "releases before v0.1.0 are named sopc; install one from https://github.com/$REPO/releases" ;;
 esac
 
 if [ -n "$RELEASES_URL" ]; then
@@ -83,32 +71,16 @@ download() { # url dest
 TMP="$(mktemp -d 2>/dev/null || mktemp -d -t sop)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
-ASSET=
-FIRST=
-for kind in $KINDS; do
-  prefix="${kind%%:*}"
-  rest="${kind#*:}"
-  candidate="${prefix}_${OS}_${ARCH}.${EXT}"
-  if [ -z "$FIRST" ]; then
-    FIRST="$candidate"
-    say "downloading $candidate ($REF)"
-  fi
-  if download "$BASE/$candidate" "$TMP/$candidate" 2>/dev/null; then
-    [ "$candidate" = "$FIRST" ] || say "release $REF has no $FIRST; using $candidate"
-    ASSET="$candidate"
-    SRC_BIN="${rest%%:*}$EXE"
-    NAME="${rest#*:}"
-    break
-  fi
-done
-if [ -z "$ASSET" ]; then
+ASSET="sop_${OS}_${ARCH}.${EXT}"
+say "downloading $ASSET ($REF)"
+if ! download "$BASE/$ASSET" "$TMP/$ASSET" 2>/dev/null; then
   if [ "$REF" = latest ]; then
     fail "no sop release found at https://github.com/$REPO/releases (none published yet?). Build from source instead: cargo install --git https://github.com/$REPO"
   else
-    fail "release $REF not found, or it has no $FIRST. See https://github.com/$REPO/releases for available versions"
+    fail "release $REF not found, or it has no $ASSET. See https://github.com/$REPO/releases for available versions"
   fi
 fi
-BIN="$NAME$EXE"
+BIN="sop$EXE"
 
 # Verify the checksum when the release has one and a sha256 tool is available.
 if download "$BASE/checksums.txt" "$TMP/checksums.txt" 2>/dev/null; then
@@ -131,10 +103,10 @@ if [ "$EXT" = zip ]; then
 else
   tar -xzf "$TMP/$ASSET" -C "$TMP/x"
 fi
-[ -f "$TMP/x/$SRC_BIN" ] || fail "$ASSET doesn't contain $SRC_BIN"
+[ -f "$TMP/x/$BIN" ] || fail "$ASSET doesn't contain $BIN"
 
 mkdir -p "$INSTALL_DIR"
-cp "$TMP/x/$SRC_BIN" "$INSTALL_DIR/$BIN.tmp"
+cp "$TMP/x/$BIN" "$INSTALL_DIR/$BIN.tmp"
 chmod 755 "$INSTALL_DIR/$BIN.tmp"
 mv "$INSTALL_DIR/$BIN.tmp" "$INSTALL_DIR/$BIN"
 say "installed $INSTALL_DIR/$BIN"
@@ -147,4 +119,4 @@ case ":$PATH:" in
     ;;
 esac
 
-say "next: '$NAME skills install' in your repo, then run the $NAME-import skill in Claude Code, Codex or OpenCode"
+say "next: 'sop skills install' in your repo, then run the sop-import skill in Claude Code, Codex or OpenCode"

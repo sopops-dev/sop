@@ -11,7 +11,7 @@
 use crate::model::{self, Agent, Sop};
 use crate::render::{fill_json, fill_variables, render_sop_in_prompt, render_workspace, sop_payload, sop_tools};
 use crate::sopfile::{kv, lost_comments, scalar};
-use crate::workspace::{load_files, load_yaml, parse_sop_file, split_front_matter, stem, Issue, Issues};
+use crate::workspace::{load_files, load_yaml, parse_sop_file, split_front_matter, stem, Issue, Issues, CONFIG};
 use regex::Regex;
 use serde_json::{Map, Value as Json};
 use serde_yaml_ng::{Mapping, Value};
@@ -337,7 +337,7 @@ fn migrate_old(files: &BTreeMap<String, String>) -> Result<Migration, Issues> {
         let msg = "instructions/ already exists: this folder is partly migrated; finish it by hand (see FORMAT.md)";
         return Err(Issues(vec![failed("instructions", msg)]));
     }
-    let Some((config_file, config_text)) = crate::workspace::config_file(files) else {
+    let Some(config_text) = files.get(CONFIG) else {
         return Err(crate::workspace::missing_config(files));
     };
     let mut m = Migration::default();
@@ -368,14 +368,14 @@ fn migrate_old(files: &BTreeMap<String, String>) -> Result<Migration, Issues> {
     }
 
     // sop.yaml
-    let Some(config_map) = load_yaml(config_text, config_file, &mut issues) else { return Err(Issues(issues)) };
+    let Some(config_map) = load_yaml(config_text, CONFIG, &mut issues) else { return Err(Issues(issues)) };
     let order = texts(&config_map, "sop_order");
     let config_new = remove_keys(config_text, model::OLD_CONFIG_FIELDS) + "\n";
-    check_edit(config_file, &config_map, &config_new, model::OLD_CONFIG_FIELDS, &Mapping::new(), &mut issues);
+    check_edit(CONFIG, &config_map, &config_new, model::OLD_CONFIG_FIELDS, &Mapping::new(), &mut issues);
     let config = match model::parse_config(&without(&config_map, model::OLD_CONFIG_FIELDS)) {
         Ok(c) => c,
         Err(errs) => {
-            issues.extend(errs.into_iter().map(|e| failed(config_file, e)));
+            issues.extend(errs.into_iter().map(|e| failed(CONFIG, e)));
             model::Config::default()
         }
     };
@@ -455,7 +455,7 @@ fn migrate_old(files: &BTreeMap<String, String>) -> Result<Migration, Issues> {
     }
 
     // The edits.
-    edit(&mut m, config_file, config_file, config_new, removed_note(&config_map, model::OLD_CONFIG_FIELDS));
+    edit(&mut m, CONFIG, CONFIG, config_new, removed_note(&config_map, model::OLD_CONFIG_FIELDS));
     for (path, map) in &base_meta {
         let id = stem(path);
         let keys = [model::OLD_INSTRUCTION_FIELDS, model::REMOVED_FIELDS].concat();

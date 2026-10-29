@@ -65,7 +65,7 @@ fn verify(root: &Path, url: &str, args: &[&str], unset: &[&str]) -> Output {
 
 const URL_VARS: [&str; 3] = ["SOP_ELEVENLABS_URL", "SOP_VAPI_URL", "SOP_RETELL_URL"];
 
-/// [`verify`] with these base URL variables set, and the other `SOP_*_URL` and `SOPC_*_URL` unset.
+/// [`verify`] with these base URL variables set, and the other `SOP_*_URL` unset.
 fn verify_with_urls(root: &Path, args: &[&str], unset: &[&str], urls: &[(String, String)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_sop"));
     cmd.arg("verify").args(args).arg("--dir").arg(root);
@@ -80,7 +80,7 @@ fn verify_with_urls(root: &Path, args: &[&str], unset: &[&str], urls: &[(String,
         }
     }
     for var in URL_VARS {
-        cmd.env_remove(var).env_remove(var.replace("SOP_", "SOPC_"));
+        cmd.env_remove(var);
     }
     for (var, url) in urls {
         cmd.env(var, url);
@@ -374,28 +374,6 @@ fn verify_in_sync_exits_0() {
     assert_eq!(out.code, 0, "{}\n{}", out.stdout, out.stderr);
     assert_eq!(out.stdout.lines().count(), 6, "{}", out.stdout); // 4 agents, a blank line, the summary
     assert!(out.stdout.ends_with("\n2 in sync, 1 not comparable, 1 skipped\n"), "{}", out.stdout);
-}
-
-#[test]
-fn verify_reads_the_old_sopc_url_variables() {
-    let (_dir, root, prompts) = workspace();
-    let (url, _) = mock(routes(&prompts));
-    let agents = ["el-sync", "agent_sync", "el-flow", "tonys-pizza"];
-    let old: Vec<(String, String)> = URL_VARS.iter().map(|var| (var.replace("SOP_", "SOPC_"), url.clone())).collect();
-    let out = verify_with_urls(&root, &agents, &[], &old);
-    assert_eq!(out.code, 0, "{}\n{}", out.stdout, out.stderr);
-    assert!(out.stdout.ends_with("\n2 in sync, 1 not comparable, 1 skipped\n"), "{}", out.stdout);
-
-    // The new names win when both are set.
-    let unreachable = {
-        let l = TcpListener::bind("127.0.0.1:0").unwrap();
-        format!("http://{}", l.local_addr().unwrap())
-    };
-    let mut both = old.clone();
-    both.extend(URL_VARS.map(|var| (var.to_string(), unreachable.clone())));
-    let out = verify_with_urls(&root, &agents, &[], &both);
-    assert_eq!(out.code, 1, "{}", out.stdout);
-    assert!(line(&out, "el-sync").contains("error: can't reach"), "{}", out.stdout);
 }
 
 #[test]

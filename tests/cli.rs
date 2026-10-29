@@ -316,11 +316,42 @@ fn plan_against_a_ref_from_before_the_rename() {
 }
 
 #[test]
-fn sopc_yaml_still_works_without_sop_yaml() {
-    // A folder from before the CLI was renamed from sopc to sop builds unchanged, silently.
+fn old_config_name_is_an_error() {
+    // sopc.yaml (the config's name before v0.1.0) is found, but every command says to rename it.
     let (dir, root) = repo();
     let root = Path::new(&root);
     std::fs::rename(root.join("sop.yaml"), root.join("sopc.yaml")).unwrap();
+    for cmd in [&[][..], &["validate"], &["lint"], &["fmt", "--check"], &["agents"], &["--check"]] {
+        let out = sop_in(dir.path(), cmd, &[]);
+        assert_eq!(out.code, 1, "{cmd:?}");
+        assert!(out.stderr.contains("sops/sopc.yaml: error [old_config_name]"), "{cmd:?}: {}", out.stderr);
+        assert!(out.stderr.contains("`git mv sops/sopc.yaml sops/sop.yaml`"), "{cmd:?}: {}", out.stderr);
+    }
+    let out = sop_in(dir.path(), &["export"], &[]);
+    assert_eq!(out.code, 1);
+    assert!(out.stdout.contains("\"old_config_name\""), "{}", out.stdout);
+    assert!(!root.join("build").exists());
+
+    // Both: sop.yaml is the config, and sopc.yaml is ignored.
+    std::fs::copy(fixture().join("sops/sop.yaml"), root.join("sop.yaml")).unwrap();
+    let out = sop_in(dir.path(), &["validate"], &[]);
+    assert_eq!((out.code, out.stdout.as_str()), (0, "0 error(s), 0 warning(s)\n"), "{}", out.stderr);
+}
+
+#[test]
+fn migrate_renames_the_old_config_name() {
+    let (dir, root) = repo();
+    let root = Path::new(&root);
+    let text = read(&root.join("sop.yaml"));
+    std::fs::rename(root.join("sop.yaml"), root.join("sopc.yaml")).unwrap();
+    let out = run_ok(dir.path(), &["migrate"]);
+    assert!(out.stdout.contains("Renaming sops/sopc.yaml → sops/sop.yaml"), "{}", out.stdout);
+    assert!(out.stdout.contains("Nothing written"), "{}", out.stdout);
+    assert!(root.join("sopc.yaml").exists() && !root.join("sop.yaml").exists());
+    let out = run_ok(dir.path(), &["migrate", "--yes"]);
+    assert!(out.stdout.contains("Renamed sops/sopc.yaml to sops/sop.yaml."), "{}", out.stdout);
+    assert!(!root.join("sopc.yaml").exists());
+    assert_eq!(read(&root.join("sop.yaml")), text);
     let out = sop_in(dir.path(), &[], &[]);
     assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "wrote 6 files to sops/build\n", ""));
     for entry in std::fs::read_dir(fixture().join("expected")).unwrap() {
@@ -328,46 +359,34 @@ fn sopc_yaml_still_works_without_sop_yaml() {
         let name = p.file_name().unwrap();
         assert_eq!(read(&root.join("build").join(name)), read(&p), "{}", name.to_string_lossy());
     }
-    let out = sop_in(dir.path(), &["validate"], &[]);
-    assert_eq!((out.code, out.stdout.as_str(), out.stderr.as_str()), (0, "0 error(s), 0 warning(s)\n", ""));
-    for cmd in [&["lint"][..], &["fmt", "--check"], &["agents"], &["export"], &["--check"]] {
-        assert_eq!(sop_in(dir.path(), cmd, &[]).code, 0, "{cmd:?}");
-    }
-    // Issues about the config name the file that is there.
-    std::fs::write(root.join("sopc.yaml"), read(&root.join("sopc.yaml")) + "\ngroups:\n  g: [nope]\n").unwrap();
-    let out = sop_in(dir.path(), &["validate"], &[]);
-    assert!(out.stderr.contains("sops/sopc.yaml: error [unknown_block]"), "{}", out.stderr);
-
-    // Both: sop.yaml wins, and sopc.yaml is ignored.
-    std::fs::copy(fixture().join("sops/sop.yaml"), root.join("sop.yaml")).unwrap();
-    let out = sop_in(dir.path(), &["validate"], &[]);
-    assert_eq!((out.code, out.stdout.as_str()), (0, "0 error(s), 0 warning(s)\n"), "{}", out.stderr);
+    let out = run_ok(dir.path(), &["migrate"]);
+    assert!(out.stdout.contains("nothing to migrate"), "{}", out.stdout);
 }
 
 #[test]
-fn plan_against_a_ref_with_sopc_yaml() {
+fn migrate_renames_the_old_config_name_of_an_old_folder() {
+    let (dir, root) = old_repo("restaurants");
+    let root = Path::new(&root);
+    std::fs::rename(root.join("sop.yaml"), root.join("sopc.yaml")).unwrap();
+    let out = run_ok(dir.path(), &["migrate", "--yes"]);
+    assert!(out.stdout.contains("Renaming sops/sopc.yaml → sops/sop.yaml"), "{}", out.stdout);
+    assert!(!root.join("sopc.yaml").exists());
+    assert!(!read(&root.join("sop.yaml")).contains("sop_order"));
+    run_ok(dir.path(), &["validate"]);
+}
+
+#[test]
+fn plan_against_a_ref_with_the_old_config_name() {
+    // History isn't the user's to fix: a ref from before v0.1.0 builds quietly.
     let (dir, root) = repo();
     std::fs::rename(Path::new(&root).join("sop.yaml"), Path::new(&root).join("sopc.yaml")).unwrap();
     git(dir.path(), &["init", "-q", "-b", "main"]);
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"]);
-    let out = run(0, &["plan", "--dir", &root, "--against", "main", "--summary"]);
-    assert!(out.stdout.contains("No agent prompts change."), "{}", out.stdout);
     git(dir.path(), &["mv", "sops/sopc.yaml", "sops/sop.yaml"]);
     let out = run(0, &["plan", "--dir", &root, "--against", "main", "--summary"]);
     assert!(out.stdout.contains("No agent prompts change."), "{}", out.stdout);
-}
-
-#[test]
-fn migrate_keeps_a_sopc_yaml_name() {
-    let (dir, root) = old_repo("restaurants");
-    let root = Path::new(&root);
-    std::fs::rename(root.join("sop.yaml"), root.join("sopc.yaml")).unwrap();
-    let out = run_ok(dir.path(), &["migrate", "--yes"]);
-    assert!(out.stdout.contains("sops/sopc.yaml"), "{}", out.stdout);
-    assert!(!root.join("sop.yaml").exists());
-    assert!(!read(&root.join("sopc.yaml")).contains("sop_order"));
-    run_ok(dir.path(), &["validate"]);
+    assert!(!out.stderr.contains("old_config_name"), "{}", out.stderr);
 }
 
 #[test]
@@ -536,7 +555,7 @@ fn format_reference_lists_every_validation_code() {
     .unwrap();
     let codes: std::collections::BTreeSet<&str> =
         re.captures_iter(&source).map(|c| c.get(1).unwrap().as_str()).collect();
-    assert_eq!(codes.len(), 36, "{codes:?}");
+    assert_eq!(codes.len(), 37, "{codes:?}");
     for code in codes {
         assert!(guide.contains(&format!("`{code}`")), "FORMAT.md doesn't document `{code}`");
     }
