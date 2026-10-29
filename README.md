@@ -9,7 +9,7 @@ The SOP compiler: modular, git-versioned instructions for teams managing multipl
 Write shared instructions and SOPs once. sop compiles each agent's full prompt<br>
 and shows exactly which agents a change touches.
 
-[Concepts](https://github.com/amanmibra/whatsop) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Usage](#usage) · [CLI reference](CLI.md) · [Format](FORMAT.md) · [Example](examples/livekit-restaurant)
+[Concepts](https://github.com/sopops-dev/whatsop) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Usage](#usage) · [CLI reference](CLI.md) · [Format](FORMAT.md) · [Example](examples/livekit-restaurant)
 
 </div>
 
@@ -110,7 +110,7 @@ const instructions = readFileSync(`sops/build/${agentId}.prompt.md`, "utf8");
 
 See the [LiveKit example](examples/livekit-restaurant) for a complete agent.
 
-**Prefer a UI and a database to files in git?** [sopops](https://github.com/amanmibra/sopops) runs the same compiler behind forms: compose agents from blocks, review the diff, publish a release, and have each agent fetch its prompt when a call starts.
+**Prefer a UI and a database to files in git?** [sopops](https://github.com/sopops-dev/sopops) runs the same compiler behind forms: compose agents from blocks, review the diff, publish a release, and have each agent fetch its prompt when a call starts.
 
 ## How it works
 
