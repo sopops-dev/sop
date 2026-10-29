@@ -470,13 +470,7 @@ pub fn validate(ws: &Workspace) -> Vec<Issue> {
         let rules = s.rules();
         for (n, rule) in rules.iter().enumerate() {
             if let Some(first) = rules[..n].iter().find(|r| r.id == rule.id) {
-                let msg = format!(
-                    "{} {} and {} {} have the same text; remove one",
-                    rule_label(rule.kind),
-                    first.index,
-                    rule_label(rule.kind),
-                    rule.index
-                );
+                let msg = format!("{} and {} have the same text; remove one", rule_place(first), rule_place(rule));
                 issues.push(Issue::error("duplicate_rule", &s.file, msg));
             }
         }
@@ -528,11 +522,13 @@ pub fn validate(ws: &Workspace) -> Vec<Issue> {
 }
 
 /// How a rule kind is named in messages.
-fn rule_label(kind: &str) -> &'static str {
-    match kind {
-        "step" => "step",
-        "never" => "never",
-        _ => "warning sign",
+/// Where a rule is: "step 3", "option 2 of step 3", "never 1" or "warning sign 1".
+fn rule_place(rule: &crate::model::Rule) -> String {
+    match (rule.kind, &rule.option) {
+        (_, Some((n, _))) => format!("option {n} of step {}", rule.index),
+        ("step", _) => format!("step {}", rule.index),
+        ("never", _) => format!("never {}", rule.index),
+        _ => format!("warning sign {}", rule.index),
     }
 }
 

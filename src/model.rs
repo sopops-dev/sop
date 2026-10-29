@@ -26,7 +26,7 @@ pub const SOP_FIELDS: &[&str] = &[
 ];
 pub const AGENT_FIELDS: &[&str] = &["id", "livekit", "vapi", "elevenlabs", "retell", "context", "blocks", "variables"];
 pub const CONFIG_FIELDS: &[&str] = &["version", "variables", "groups", "sops_heading"];
-pub const STEP_FIELDS: &[&str] = &["text", "tool", "required"];
+pub const STEP_FIELDS: &[&str] = &["text", "tool", "required", "or"];
 /// Fields a file must set ("id" and an instruction's "text" are filled in by the loader).
 pub const SOP_REQUIRED: &[&str] = &["name", "procedureSteps"];
 pub const STEP_REQUIRED: &[&str] = &["text"];
@@ -48,12 +48,20 @@ pub struct Step {
     pub text: String,
     pub tool: Option<String>,
     pub required: bool,
+    /// Steps only: alternatives to this step. On a call, only one of the step and its options
+    /// applies (each usually starts with its condition, "If ..."). Options have no `or` of their own.
+    pub or: Vec<Step>,
 }
 
 impl Step {
     /// The tool name, if one is set and not empty.
     pub fn tool(&self) -> Option<&str> {
         self.tool.as_deref().filter(|t| !t.is_empty())
+    }
+
+    /// The step and its `or` options, in order.
+    pub fn options(&self) -> impl Iterator<Item = &Step> {
+        std::iter::once(self).chain(&self.or)
     }
 }
 
@@ -66,13 +74,21 @@ pub struct Rule {
     pub kind: &'static str,
     /// 1-based position among the rules of its kind.
     pub index: usize,
-    /// The source text (placeholders not filled), trimmed, whitespace collapsed.
+    /// The source text (placeholders not filled), trimmed, whitespace collapsed. A step with
+    /// `or` options: each option's text, joined with " OR ".
     pub text: String,
+    /// An "option" rule: its 1-based place among its step's options, and the step rule's id.
+    pub option: Option<(usize, String)>,
 }
 
 impl Rule {
     pub fn to_json(&self) -> Json {
-        json!({"id": self.id, "kind": self.kind, "index": self.index, "text": self.text})
+        let mut v = json!({"id": self.id, "kind": self.kind, "index": self.index, "text": self.text});
+        if let Some((n, of)) = &self.option {
+            v["option"] = json!(n);
+            v["of"] = json!(of);
+        }
+        v
     }
 }
 
@@ -84,6 +100,7 @@ pub fn normalize_rule_text(text: &str) -> String {
 /// A rule's id: the first 12 hex characters of sha256("<procedure>\x1f<kind>\x1f<normalized text>").
 /// It changes when the text does (an edited rule is a new rule), not when rules are reordered or
 /// only whitespace changes, and it is the same for every agent (placeholders aren't filled).
+/// An `or` option is hashed as a "step", so a step that gains options keeps its id as option 1.
 pub fn rule_id(procedure: &str, kind: &str, text: &str) -> String {
     let mut hash = sha256_hex(&format!("{procedure}\x1f{kind}\x1f{}", normalize_rule_text(text)));
     hash.truncate(12);
@@ -113,18 +130,31 @@ pub struct Sop {
 }
 
 impl Sop {
-    /// Its steps, then its nevers, then its warning signs, each with its id.
+    /// Its steps, then its nevers, then its warning signs, each with its id. A step with `or`
+    /// options is one "step" rule (its options' text joined with " OR ") followed by an "option"
+    /// rule per option, at the step's index.
     pub fn rules(&self) -> Vec<Rule> {
         let kinds =
             [("step", &self.procedure_steps), ("never", &self.forbidden_actions), ("warning", &self.warning_signs)];
         let mut out = vec![];
         for (kind, list) in kinds {
-            out.extend(list.iter().enumerate().map(|(i, s)| Rule {
-                id: rule_id(&self.id, kind, &s.text),
-                kind,
-                index: i + 1,
-                text: normalize_rule_text(&s.text),
-            }));
+            for (i, s) in list.iter().enumerate() {
+                if s.or.is_empty() {
+                    let (id, text) = (rule_id(&self.id, kind, &s.text), normalize_rule_text(&s.text));
+                    out.push(Rule { id, kind, index: i + 1, text, option: None });
+                    continue;
+                }
+                let text = s.options().map(|o| normalize_rule_text(&o.text)).collect::<Vec<_>>().join(" OR ");
+                let id = rule_id(&self.id, kind, &text);
+                out.push(Rule { id: id.clone(), kind, index: i + 1, text, option: None });
+                out.extend(s.options().enumerate().map(|(k, o)| Rule {
+                    id: rule_id(&self.id, kind, &o.text),
+                    kind: "option",
+                    index: i + 1,
+                    text: normalize_rule_text(&o.text),
+                    option: Some((k + 1, id.clone())),
+                }));
+            }
         }
         out
     }
@@ -237,8 +267,10 @@ fn steps_json(steps: &[Step]) -> Json {
     let items = steps.iter().map(|s| {
         if s.plain {
             json!(s.text)
-        } else {
+        } else if s.or.is_empty() {
             json!({"text": s.text, "tool": s.tool, "required": s.required})
+        } else {
+            json!({"text": s.text, "tool": s.tool, "required": s.required, "or": steps_json(&s.or)})
         }
     });
     Json::Array(items.collect())
@@ -407,6 +439,40 @@ impl<'a> Fields<'a> {
         out
     }
 
+    /// A step's `or` list: at least one option, each a string or {text, tool, required}.
+    fn options(&self, e: &mut Errors) -> Vec<Step> {
+        let Some((v, loc)) = self.get("or") else { return vec![] };
+        let Value::Sequence(items) = v else {
+            e.add(&loc, "expected a list of options");
+            return vec![];
+        };
+        if items.is_empty() {
+            e.add(&loc, "`or` has no options; remove it or add at least one");
+        }
+        let mut out = vec![];
+        for (i, item) in items.iter().enumerate() {
+            let loc = format!("{loc}.{i}");
+            match untag(item) {
+                Value::String(s) => out.push(Step { plain: true, text: s.clone(), ..Step::default() }),
+                Value::Mapping(m) => {
+                    if m.contains_key("or") {
+                        e.add(&join(&loc, "or"), "an option can't have its own `or`; list every option under the step");
+                    }
+                    let f = Fields::new(m, &loc, STEP_FIELDS, STEP_REQUIRED, e); // `or` is reported above
+                    out.push(Step {
+                        plain: false,
+                        text: f.string("text", e).unwrap_or_default(),
+                        tool: f.opt_string("tool", e),
+                        required: f.boolean("required", e),
+                        or: vec![],
+                    });
+                }
+                _ => e.add(&loc, "expected text, or a mapping with text, tool and required"),
+            }
+        }
+        out
+    }
+
     fn steps(&self, name: &str, e: &mut Errors) -> Vec<Step> {
         let Some((v, loc)) = self.get(name) else { return vec![] };
         let Value::Sequence(items) = v else {
@@ -420,14 +486,23 @@ impl<'a> Fields<'a> {
                 Value::String(s) => out.push(Step { plain: true, text: s.clone(), ..Step::default() }),
                 Value::Mapping(m) => {
                     let f = Fields::new(m, &loc, STEP_FIELDS, STEP_REQUIRED, e);
+                    let or = if f.get("or").is_none() {
+                        vec![]
+                    } else if name != "procedureSteps" {
+                        e.add(&join(&loc, "or"), "`or` options apply only to procedureSteps");
+                        vec![]
+                    } else {
+                        f.options(e)
+                    };
                     out.push(Step {
                         plain: false,
                         text: f.string("text", e).unwrap_or_default(),
                         tool: f.opt_string("tool", e),
                         required: f.boolean("required", e),
+                        or,
                     });
                 }
-                _ => e.add(&loc, "expected text, or a mapping with text, tool and required"),
+                _ => e.add(&loc, "expected text, or a mapping with text, tool, required and or"),
             }
         }
         out

@@ -371,7 +371,8 @@ fn check(http: &ureq::Agent, build: &Build, id: &str) -> Check {
 pub fn referenced_tools(r: &crate::render::Rendered) -> Vec<ToolRef> {
     let mut tools: BTreeMap<String, bool> = BTreeMap::new();
     for sop in r.sops() {
-        for step in sop.procedure_steps.iter().chain(&sop.forbidden_actions).chain(&sop.warning_signs) {
+        let steps = sop.procedure_steps.iter().chain(&sop.forbidden_actions).chain(&sop.warning_signs);
+        for step in steps.flat_map(|st| st.options()) {
             if let Some(tool) = step.tool() {
                 *tools.entry(tool.to_string()).or_default() |= step.required;
             }

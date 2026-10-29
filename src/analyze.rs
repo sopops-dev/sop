@@ -1399,7 +1399,7 @@ fn agent_texts(ws: &Workspace, agent: &Agent, split: bool) -> Vec<(String, Strin
             (&s.forbidden_actions, StepKind::Forbidden),
             (&s.warning_signs, StepKind::Warning),
         ] {
-            parts.extend(list.iter().map(|st| render_step(st, kind)));
+            parts.extend(list.iter().flat_map(|st| st.options()).map(|st| render_step(st, kind)));
         }
         parts.retain(|p| !p.is_empty());
         add(format!("SOP `{}`", s.id), &parts.join("\n"));

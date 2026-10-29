@@ -2217,3 +2217,106 @@ fn compare_fails_a_changed_rule_word_however_alike() {
     assert!(!r.ok());
     assert_eq!(r.changed[0].1, "Never upsell more than thrice per call to any guest.");
 }
+
+// --- OR options ---------------------------------------------------------------------------------------
+
+const MD_OR: &str = "# Reservations\n\n**Goal:** g\n\n## Steps\n1. Collect the details\n2. If the caller wants to cancel, cancel it `tool: cancel_booking` `required`\n   OR if they want to change it, change it `tool: change_booking`\n   OR if they're late, tell the store\n3. Close the call\n";
+
+#[test]
+fn or_options_read_from_markdown() {
+    let (sop, warnings) = parse_sop_file("procedures/reservations.md", MD_OR).unwrap();
+    assert!(warnings.is_empty());
+    let step = &sop.procedure_steps[1];
+    assert_eq!(
+        (step.text.as_str(), step.tool.as_deref(), step.required),
+        ("If the caller wants to cancel, cancel it", Some("cancel_booking"), true)
+    );
+    let or: Vec<(&str, Option<&str>, bool)> =
+        step.or.iter().map(|o| (o.text.as_str(), o.tool.as_deref(), o.plain)).collect();
+    assert_eq!(
+        or,
+        [
+            ("if they want to change it, change it", Some("change_booking"), false),
+            ("if they're late, tell the store", None, true)
+        ]
+    );
+    assert_eq!(sop.procedure_steps.len(), 3);
+}
+
+#[test]
+fn or_options_round_trip_through_yaml_without_changing_output() {
+    let (yaml_path, yaml) = rewrite("procedures/reservations.md", MD_OR, Kind::Yaml).unwrap();
+    assert!(yaml.contains("    or:\n      - text: if they want to change it, change it\n        tool: change_booking\n      - if they're late, tell the store\n"), "{yaml}");
+    let (_, md) = rewrite(&yaml_path, &yaml, Kind::Markdown).unwrap();
+    assert_eq!(md, MD_OR);
+}
+
+#[test]
+fn or_options_render_under_their_step() {
+    let (sop, _) = parse_sop_file("procedures/reservations.md", MD_OR).unwrap();
+    let text = crate::render::render_sop(&sop, true, false, false);
+    assert!(text.contains("2. If the caller wants to cancel, cancel it. Use the `cancel_booking` tool.\n   OR: if they want to change it, change it. Use the `change_booking` tool.\n   OR: if they're late, tell the store\n3. Close the call"), "{text}");
+    let tools: Vec<&str> = crate::render::sop_tools(&sop).collect();
+    assert_eq!(tools, ["cancel_booking", "change_booking"]);
+}
+
+#[test]
+fn or_options_are_option_rules_of_one_step() {
+    let (sop, _) = parse_sop_file("procedures/reservations.md", MD_OR).unwrap();
+    let rules = sop.rules();
+    let summary: Vec<(&str, usize, Option<usize>)> =
+        rules.iter().map(|r| (r.kind, r.index, r.option.as_ref().map(|o| o.0))).collect();
+    assert_eq!(
+        summary,
+        [
+            ("step", 1, None),
+            ("step", 2, None),
+            ("option", 2, Some(1)),
+            ("option", 2, Some(2)),
+            ("option", 2, Some(3)),
+            ("step", 3, None)
+        ]
+    );
+    let step = &rules[1];
+    assert_eq!(step.text, "If the caller wants to cancel, cancel it OR if they want to change it, change it OR if they're late, tell the store");
+    assert!(rules[2..5].iter().all(|r| r.option.as_ref().unwrap().1 == step.id));
+    // A step that gains options keeps its id as option 1, so its history carries over.
+    assert_eq!(rules[2].id, rule_id("reservations", "step", "If the caller wants to cancel, cancel it"));
+    assert_eq!(
+        rules[2].to_json(),
+        serde_json::json!({"id": rules[2].id, "kind": "option", "index": 2, "text": "If the caller wants to cancel, cancel it", "option": 1, "of": step.id})
+    );
+    // A step without options keeps the JSON it had.
+    assert!(rules[0].to_json().get("option").is_none());
+}
+
+#[test]
+fn or_options_problems() {
+    assert_eq!(md_problems("# N\n## Steps\n1. a\n## Never\n- b\n  OR c\n"), [("md_or_outside_steps", 6)]);
+    for (yaml, want) in [
+        (
+            "name: N\nprocedureSteps:\n  - text: a\n    or:\n      - text: b\n        or: [c]\n",
+            "procedureSteps.0.or.0.or",
+        ),
+        ("name: N\nprocedureSteps:\n  - text: a\n    or: []\n", "procedureSteps.0.or"),
+        ("name: N\nprocedureSteps: [a]\nforbiddenActions:\n  - text: b\n    or: [c]\n", "forbiddenActions.0.or"),
+    ] {
+        let issues = parse_sop_file("procedures/n.yaml", yaml).err().unwrap();
+        assert_eq!(issues.len(), 1, "{yaml}");
+        assert!(issues[0].message.contains(want), "{}", issues[0].message);
+    }
+    // The same text twice among a step's options is a duplicate rule.
+    let r = Repo::new();
+    r.edit(
+        "procedures/reservations.yaml",
+        "  - Confirm the booking details",
+        "  - text: Hold the table\n    or: [Hold the table]\n  - Confirm the booking details",
+    );
+    let issues = validate(&ws(r.root()));
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.code == "duplicate_rule" && i.message.contains("option 1 of step 3 and option 2 of step 3")),
+        "{issues:?}"
+    );
+}

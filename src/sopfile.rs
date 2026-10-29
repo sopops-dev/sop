@@ -26,6 +26,8 @@ static DEEPER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^#{3,}(?:\s|$)").
 static LABEL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\*\*([^*]+?)(:\*\*|\*\*:)\s*(.*)$").unwrap());
 static ITEM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:-|\d+\.)(?:\s+(.*))?$").unwrap());
 static ANNOTATION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*`([^`]*)`\s*$").unwrap());
+/// An `OR` option line under a step: `OR <text>`, indented or not.
+static OR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^OR\s+(.+)$").unwrap());
 static TOOL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^tool:\s*(\S+)$").unwrap());
 
 fn section_list() -> &'static str {
@@ -89,15 +91,17 @@ pub fn parse_markdown(text: &str, path: &str, issues: &mut Vec<Issue>, warnings:
     let mut values: [Option<String>; 2] = [None, None]; // Goal, When
     let (mut field, mut paragraphs, mut para) = (None::<usize>, vec![], Vec::<&str>::new());
     let mut sections: [Option<(usize, Vec<Value>)>; 3] = [None, None, None];
-    let (mut at, mut title, mut item) = (At::Head, String::new(), None::<(usize, String)>);
+    // The open list item: its line and text, then each `OR` option's line and text.
+    let (mut at, mut title, mut item) = (At::Head, String::new(), None::<Vec<(usize, String)>>);
     let mut reported_before = false;
 
-    let close_item = |item: &mut Option<(usize, String)>,
+    let close_item = |item: &mut Option<Vec<(usize, String)>>,
                       at: At,
                       r: &mut Report,
                       sections: &mut [Option<(usize, Vec<Value>)>; 3]| {
-        if let (Some((n, text)), At::Section(k)) = (item.take(), at) {
-            if let Some(v) = parse_item(&text, n, k, r) {
+        if let (Some(parts), At::Section(k)) = (item.take(), at) {
+            let n = parts[0].0;
+            if let Some(v) = parse_step(&parts, k, r) {
                 sections[k].get_or_insert((n, vec![])).1.push(v);
             }
         }
@@ -158,10 +162,14 @@ pub fn parse_markdown(text: &str, path: &str, issues: &mut Vec<Issue>, warnings:
         } else if at != At::Head {
             let indented = raw.starts_with([' ', '\t']);
             let new_item = if indented { None } else { ITEM.captures(line) };
+            let option = OR.captures(t).filter(|_| item.is_some());
             if let Some(c) = new_item {
                 close_item(&mut item, at, &mut r, &mut sections);
-                item = Some((n, c.get(1).map_or("", |m| m.as_str()).to_string()));
-            } else if let (true, Some((_, text))) = (indented, item.as_mut()) {
+                item = Some(vec![(n, c.get(1).map_or("", |m| m.as_str()).to_string())]);
+            } else if let (Some(c), Some(parts)) = (option, item.as_mut()) {
+                parts.push((n, c[1].to_string()));
+            } else if let (true, Some(parts)) = (indented, item.as_mut()) {
+                let text = &mut parts.last_mut().unwrap().1;
                 text.push(' ');
                 text.push_str(t);
             } else {
@@ -231,6 +239,27 @@ pub fn parse_markdown(text: &str, path: &str, issues: &mut Vec<Issue>, warnings:
         map.extend(section.map(|(_, items)| (Value::from(*key), Value::Sequence(items))));
     }
     Some(map)
+}
+
+/// A list item with its `OR` options: a string, or {text, tool, required, or}.
+fn parse_step(parts: &[(usize, String)], section: usize, r: &mut Report) -> Option<Value> {
+    let (n, text) = &parts[0];
+    let first = parse_item(text, *n, section, r);
+    if parts.len() == 1 {
+        return first;
+    }
+    if section != 0 {
+        let msg = format!("`OR` options only apply under ## Steps, not ## {}", SECTIONS[section].0);
+        r.error(parts[1].0, "md_or_outside_steps", msg);
+        return None;
+    }
+    let options: Vec<Value> = parts[1..].iter().filter_map(|(n, t)| parse_item(t, *n, section, r)).collect();
+    let mut m = match first? {
+        Value::Mapping(m) => m,
+        v => Mapping::from_iter([(Value::from("text"), v)]),
+    };
+    m.insert("or".into(), Value::Sequence(options));
+    Some(Value::Mapping(m))
 }
 
 /// A list item's text with its trailing `tool: name` and `required` markers.
@@ -352,6 +381,9 @@ fn step_md(s: &Step) -> String {
     if s.required {
         out += " `required`";
     }
+    for o in &s.or {
+        out += &format!("\n   OR {}", step_md(o));
+    }
     out
 }
 
@@ -416,6 +448,22 @@ pub fn to_yaml(sop: &Sop, header: &str) -> String {
             }
             if s.required {
                 lines.push("    required: true".into());
+            }
+            if !s.or.is_empty() {
+                lines.push("    or:".into());
+            }
+            for o in &s.or {
+                if o.plain {
+                    lines.push(kv("      -", &o.text, 6).replacen("      -: ", "      - ", 1));
+                    continue;
+                }
+                lines.push(kv("      - text", &o.text, 8));
+                if let Some(tool) = &o.tool {
+                    lines.push(format!("        tool: {}", scalar(tool, false)));
+                }
+                if o.required {
+                    lines.push("        required: true".into());
+                }
             }
         }
     }

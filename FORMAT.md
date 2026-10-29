@@ -122,7 +122,8 @@ The rules are strict, so every SOP reads the same and mistakes are caught:
 - A field continues on the following lines until a blank line; the lines are joined with a space.
 - Under a section, only list items (`- ` or `1. `). An indented line continues the item above it. Blank lines are fine.
 - Sections may come in any order; `sopc fmt` puts them in the order above.
-- A list item can end with markers in backticks, in either order: `` `tool: lookup_allergens` `` (the tool's exact name, one word) and `` `required` `` (steps only: the tool call must happen). An item with markers is the YAML object `{text, tool, required}`; without, a plain string.
+- A list item can end with markers in backticks, in either order: `` `tool: lookup_allergens` `` (the tool's exact name, one word) and `` `required` `` (steps only: skipping the step or its tool call fails the check, even if the goal was reached). An item with markers is the YAML object `{text, tool, required}`; without, a plain string.
+- A step can have alternatives: lines starting with `OR ` right under it, usually indented. On a call only one of them applies, so start each with its condition. Each option can have its own markers. See [OR options](#or-options).
 - Notes for people go in front-matter comments (`# ...`). Everything in the body is prompt text.
 
 ## procedures/\<id\>.yaml
@@ -176,10 +177,43 @@ For long text, a `|` block avoids quoting entirely.
 ```yaml
 - text: Check availability       # required
   tool: check_reservations       # optional: a tool the agent has
-  required: true                 # optional, steps only: the tool call must happen
+  required: true                 # optional, steps only: skipping it or its tool call fails the check
+  or: []                         # optional, steps only: alternatives (below)
 ```
 
 A step with a `tool` gets an instruction to use it ("Check availability. Use the `check_reservations` tool."), and the tool name is recorded in `build/lock.json`. Use the tool's exact name as the agent's code or platform defines it.
+
+<a id="or-options"></a>
+**OR options.** When a step depends on the situation ("if X, use tool A; if Y, use tool B"), write the alternatives as one step with `or` options instead of separate steps. Separate steps read as a sequence, so a check expects all of them, in order.
+
+```markdown
+## Steps
+1. Collect name, date, time and party size
+2. If the caller wants to cancel, cancel the booking `tool: cancel_booking` `required`
+   OR if they want to change it, change the booking `tool: change_booking` `required`
+   OR if they're running late, tell the store `tool: notify_late`
+3. Say the booking back and close the call
+```
+
+```yaml
+procedureSteps:
+  - Collect name, date, time and party size
+  - text: If the caller wants to cancel, cancel the booking
+    tool: cancel_booking
+    required: true
+    or:
+      - text: If they want to change it, change the booking
+        tool: change_booking
+        required: true
+      - text: If they're running late, tell the store
+        tool: notify_late
+  - Say the booking back and close the call
+```
+
+- The step and its options take one place in the order; the prompt lists each option on its own `OR:` line under the step.
+- Each option has its own text, `tool` and `required`. Options can't have options of their own: list every alternative under the step.
+- `or` is for steps only, not `forbiddenActions` or `warningSigns`.
+- Rules: the step is one `step` rule (its options' text joined with " OR "), followed by one `option` rule per option, with `option` (1-based) and `of` (the step rule's id). An option's id is computed as if it were a step, so a step that gains options keeps its id as option 1.
 
 **Delivery.** Where the SOP's content goes:
 
@@ -277,6 +311,7 @@ Set exactly one platform field. Write `context` right after it, then `blocks`, s
 | `md_text_in_section` | error | Text under a `##` section that isn't a list item or an indented continuation. |
 | `md_bad_annotation` | error | A malformed tool marker: `` `tool:` `` without a name, `` `tools: x` ``, `` `tool: two words` ``, or two tool markers. |
 | `md_required_outside_steps` | error | `` `required` `` under `## Never` or `## Warning signs`. |
+| `md_or_outside_steps` | error | An `OR` line under `## Never` or `## Warning signs`. |
 | `md_empty_section` | warning | `## Never` or `## Warning signs` with no items. |
 | `id_mismatch` | error | An explicit `id:` differs from the file name. Usually just remove `id:`. |
 | `duplicate_id` | error | An instruction and an SOP share an id, or a group has the name of one. |

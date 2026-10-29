@@ -119,6 +119,7 @@ pub fn render_sop(s: &Sop, steps: bool, guards: bool, details: bool) -> String {
         lines.extend([String::new(), "Steps:".into()]);
         for (n, st) in s.procedure_steps.iter().enumerate() {
             lines.push(format!("{}. {}", n + 1, render_step(st, StepKind::Step)));
+            lines.extend(st.or.iter().map(|o| format!("   OR: {}", render_step(o, StepKind::Step))));
         }
     }
     for (show, title, list, kind) in [
@@ -154,6 +155,9 @@ fn steps_payload(steps: &[Step]) -> Json {
         if s.required {
             o.insert("required".into(), json!(true));
         }
+        if !s.or.is_empty() {
+            o.insert("or".into(), steps_payload(&s.or));
+        }
         Json::Object(o)
     });
     Json::Array(items.collect())
@@ -171,9 +175,14 @@ pub fn sop_payload(s: &Sop) -> Json {
     })
 }
 
-/// The tools an SOP's steps name, in order.
+/// The tools an SOP's steps (and their `or` options) name, in order.
 pub fn sop_tools(s: &Sop) -> impl Iterator<Item = &str> {
-    s.procedure_steps.iter().chain(&s.forbidden_actions).chain(&s.warning_signs).filter_map(|st| st.tool())
+    s.procedure_steps
+        .iter()
+        .chain(&s.forbidden_actions)
+        .chain(&s.warning_signs)
+        .flat_map(|st| st.options())
+        .filter_map(|st| st.tool())
 }
 
 pub fn fill_json(v: &mut Json, values: &Vars) {

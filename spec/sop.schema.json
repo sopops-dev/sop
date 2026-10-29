@@ -2,7 +2,7 @@
   "$defs": {
     "Step": {
       "additionalProperties": false,
-      "description": "A step, forbidden action or warning sign that names a tool.",
+      "description": "A step, forbidden action or warning sign that names a tool, is required, or (steps only) has `or` options.",
       "properties": {
         "text": {
           "description": "What the agent should do (or never do, or watch for).",
@@ -24,7 +24,58 @@
         },
         "required": {
           "default": false,
-          "description": "Steps only: the tool call must happen whenever this SOP applies, even if the goal was met another way.",
+          "description": "Steps only: skipping this step, or its tool call, fails the check even if the goal was met another way. With a tool, the call is checked against the tool log.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "or": {
+          "description": "Steps only: alternatives to this step, each usually starting with its condition (\"If ...\"). On a call, only one of the step and its options applies. Options have no `or` of their own.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/Option"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Or",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "Option": {
+      "additionalProperties": false,
+      "description": "An `or` option of a step: the same fields as a step, without `or`.",
+      "properties": {
+        "text": {
+          "description": "What the agent should do (or never do, or watch for).",
+          "title": "Text",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name of a tool the agent has (e.g. a LiveKit function tool). Rendered as an instruction to use it, and checked against the call's tool log.",
+          "title": "Tool"
+        },
+        "required": {
+          "default": false,
+          "description": "Steps only: skipping this step, or its tool call, fails the check even if the goal was met another way. With a tool, the call is checked against the tool log.",
           "title": "Required",
           "type": "boolean"
         }
@@ -32,7 +83,7 @@
       "required": [
         "text"
       ],
-      "title": "Step",
+      "title": "Option",
       "type": "object"
     }
   },
@@ -79,7 +130,7 @@
       "type": "string"
     },
     "procedureSteps": {
-      "description": "Ordered steps; at least one. Each is a string, or {text, tool, required}.",
+      "description": "Ordered steps; at least one. Each is a string, or {text, tool, required, or}.",
       "items": {
         "anyOf": [
           {
