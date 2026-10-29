@@ -48,7 +48,7 @@ Most teams start here: a prompt per agent, written by hand, mostly copied from e
 **1. Add the import skill to your repo** (one line, run in the repo root):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/amanmibra/sopc/main/skills/sopc-import/SKILL.md --create-dirs -o .claude/skills/sopc-import/SKILL.md
+curl -fsSL https://raw.githubusercontent.com/sopops-dev/sopc/main/skills/sopc-import/SKILL.md --create-dirs -o .claude/skills/sopc-import/SKILL.md
 ```
 
 For Codex, use `-o .agents/skills/sopc-import/SKILL.md` instead. OpenCode reads either.
@@ -84,7 +84,7 @@ For tools built on sopc, `sopc overlap --json` and `sopc compare --json` print t
 <summary>Claude Code plugin (shares the skill with your whole team)</summary>
 
 ```
-/plugin marketplace add amanmibra/sopc
+/plugin marketplace add sopops-dev/sopc
 /plugin install sopc@sopc
 ```
 
@@ -97,7 +97,7 @@ Then run `/sopc:sopc-import` (plugin skills are prefixed with the plugin name). 
 Install the CLI, copy [`examples/livekit-restaurant/sops`](examples/livekit-restaurant/sops) into your repo as `sops/`, and edit it. Every file is commented, and `sopc guide` prints the full format reference. Coding agents can write sopc files from it too.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/amanmibra/sopc/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/sopops-dev/sopc/main/install.sh | sh
 ```
 
 One binary for macOS, Linux and Windows. Version pinning, building from source and uninstalling are in the [CLI reference](CLI.md#install-and-uninstall).
