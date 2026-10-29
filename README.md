@@ -23,6 +23,20 @@ Running one agent per customer usually means dozens of near-identical prompts ma
 
 sopc keeps the shared parts in one place, in git, and compiles them into one prompt per agent.
 
+### Why structure
+
+With a free-text prompt, you can't say exactly what the agent was supposed to do, so you can't measure whether it did. Structure turns instructions into a spec you can check an agent against:
+
+- **Mistakes have names.** Every step and never-do has a stable id, so call or chat QA can report "skipped step 2 of allergen-check" instead of "bad call," and track a pass rate per rule.
+- **Changes are traceable.** `sopc plan` shows which agents an edit touches before you merge. Compare pass rates before and after a release, and a regression points to a specific edit.
+- **Shared parts are written once.** A tone tweak is one edit instead of thirty, and copies stop drifting.
+- **Automated improvement can be reviewed.** An LLM rewriting a whole prompt produces a diff nobody can check. A proposed change to the one rule that keeps failing is a small diff a person can approve.
+- **Conflicts surface early.** `sopc lint` flags "always X" against "never X" before an agent hits it.
+- **Non-engineers can own it.** Ops and support teams already write SOPs. The format reads like theirs.
+- **There's an audit trail.** Git and rule ids show which version of which rule was live on any conversation.
+
+This works for any task-driven agent, not only voice: support chat, ticket triage, back-office ops, email outreach. It starts paying off at around five agents, or when someone asks how often an agent gets a step wrong. One agent with one prompt doesn't need it.
+
 Not related to Mozilla's `sops` (secrets).
 
 ## Quickstart
